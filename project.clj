@@ -1,9 +1,9 @@
-(defproject dyna-lint "0.1.0-SNAPSHOT"
-  :description "Lint your program at runtime"
-  :url "http://example.com/FIXME"
+(defproject com.ambrosebs/dynalint "0.1.0-SNAPSHOT"
+  :description "Lint your Clojure program by running them"
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
   :dependencies [[org.clojure/clojure "1.5.1"]
-                 [io.aviso/pretty "0.1.8"]]
+                 #_[org.clojure/core.typed "0.2.22-20140108.041125-4"]]
+  :repositories {"sonatype-oss-public" "https://oss.sonatype.org/content/groups/public/"}
   :profiles {:dev {:repl-options {:port 64476}}}
   )
