@@ -2,6 +2,10 @@
 
 Lint your Clojure programs as they run.
 
+```
+[com.ambrosebs/dynalint "0.1.0"]
+```
+
 Dynalint is a simplistic linter that wraps operations in runtime checks.
 
 It is designed to never change behaviour, except for throwing different
