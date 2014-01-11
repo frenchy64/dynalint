@@ -1,4 +1,4 @@
-(defproject com.ambrosebs/dynalint "0.1.0"
+(defproject com.ambrosebs/dynalint "0.1.1-SNAPSHOT"
   :description "Lint your Clojure program by running them"
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
