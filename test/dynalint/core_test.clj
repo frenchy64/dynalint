@@ -265,3 +265,17 @@
 ;        (reduce nil 1)))
 ;  (is (throws-dynalint-error?
 ;        (reduce nil 1 [1]))))
+
+(deftest let-destructure-test
+  #_(is (throws-dynalint-error?
+        (eval '(let [{} 1])))))
+
+(deftest deref-test
+  (is (throws-dynalint-error?
+        @nil))
+  (is (throws-dynalint-error?
+        (deref nil)))
+  (is (deref (atom true)))
+  (is (deref (reify
+               java.util.concurrent.Future
+               (get [_] true)))))

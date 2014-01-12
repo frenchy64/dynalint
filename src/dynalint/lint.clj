@@ -9,9 +9,18 @@
             [clojure.set :as set]
             #_[clojure.core.typed :as t]))
 
+(when-not (= "1.5.1" (clojure-version))
+  (prn "WARNING: Dynalint is designed for Clojure 1.5.1, running " 
+       (clojure-version)))
+
 ;(t/tc-ignore
 (set! *warn-on-reflection* true)
   ;)
+
+(defmacro tc-ignore [& body]
+  (assert (seq body))
+  `(do :core.typed/tc-ignore
+       ~@body))
 
 ;(t/ann corrupt-vars (t/Atom1 (t/Set (Var Nothing Any))))
 (def ^:private corrupt-vars (atom #{}))
@@ -54,7 +63,7 @@
 (defn print-error
   ([id]
    (when-let [e (@error-history id)]
-     (apply repl/pst e)))
+     (repl/pst e)))
   ([id depth]
    (when-let [e (@error-history id)]
      (repl/pst e depth))))
@@ -158,7 +167,8 @@
         e (try (throw (ex-info
                         msg
                         {::dynalint true
-                         ::warning true}))
+                         ::warning true
+                         ::id id}))
                (catch clojure.lang.ExceptionInfo e
                  e))]
     (add-warning id e)
@@ -1175,6 +1185,17 @@
 ;        [& [:as all]]
 ;        (check-nargs #{2 3} the-var all)
 ;        (apply original all)))
+   #'clojure.core/deref
+    (fn clojure.core$deref
+      [original the-var]
+      (fn wrapper 
+        [& [r :as all]]
+        (check-nargs #{1} the-var all)
+        (when-not (or (instance? clojure.lang.IDeref r)
+                      (instance? java.util.concurrent.Future r))
+          (error "First argument to clojure.core/deref must be ideref or a future: "
+                 (short-ds r)))
+        (original r)))
    })
 
 ;(t/ann new-var-inlines (t/Map Var [[Any * -> Any] -> [Any * -> Any]]))
@@ -1187,10 +1208,11 @@
         (let [gx (gensym 'x)]
           `(let [~gx ~x
                  res# ~(original gx)]
-             (when-not (< ~gx res#)
-               (warn "clojure.core/unchecked-inc (inlining) overflow detected : "
-                     (short-ds ~gx) " (" (class ~gx) ")" " -> " (short-ds res#)
-                     " (" (class ~gx) ")"))
+             (tc-ignore
+               (when-not (< ~gx res#)
+                 (warn "clojure.core/unchecked-inc (inlining) overflow detected : "
+                       (short-ds ~gx) " (" (class ~gx) ")" " -> " (short-ds res#)
+                       " (" (class ~gx) ")")))
              ; help the type inference out
              ~(original gx)))))
    })
@@ -1222,29 +1244,39 @@
         (= :when b)
           (recur ne (conj new-exprs b i))
         (keyword? b)
-          (error "clojure.core/for invalid keyword: " b)
+          (error vsym " invalid keyword: " b)
         :else 
           (let [rhs `(let [gs# ~i]
-                       (when-not (seq-succeeds? gs#)
-                         (error "clojure.core/for initial binding must be seqable: "
-                                (class gs#)))
+                       (tc-ignore
+                         (when-not (seq-succeeds? gs#)
+                           (error vsym " initial binding must be seqable: "
+                                  (class gs#))))
                        gs#)]
             (recur ne (conj new-exprs b rhs))))
       new-exprs)))
+
+;(defn validate-destructure-syntax [s]
+;  (cond
+;    (vector? s)
+;      (doall 
+;        (map validate-destructure-syntax s))
+;    (map? s)
 
 (def ^:private new-macro-mappings
   {#'clojure.core/lazy-seq
     (fn clojure.core$lazy-seq
       [original the-var]
-      (fn wrapper [&form &env & all]
+      (fn wrapper 
+        [&form &env & all]
         (original
           &form &env
           `(let [s# (do ~@all)]
-             (when-not (seq-succeeds? s#)
-               (binding [*inside-lazy-seq* true]
-                 (error "clojure.core/lazy-seq argument must be seqable: "
-                        (class s#)
-                        "\n\n\t in:\n" '~&form)))
+             (tc-ignore
+               (when-not (seq-succeeds? s#)
+                 (binding [*inside-lazy-seq* true]
+                   (error "clojure.core/lazy-seq argument must be seqable: "
+                          (class s#)
+                          "\n\n\t in:\n" '~&form))))
              s#))))
    #'clojure.core/let
     (fn clojure.core$let
