@@ -1185,17 +1185,18 @@
 ;        [& [:as all]]
 ;        (check-nargs #{2 3} the-var all)
 ;        (apply original all)))
-   #'clojure.core/deref
-    (fn clojure.core$deref
-      [original the-var]
-      (fn wrapper 
-        [& [r :as all]]
-        (check-nargs #{1} the-var all)
-        (when-not (or (instance? clojure.lang.IDeref r)
-                      (instance? java.util.concurrent.Future r))
-          (error "First argument to clojure.core/deref must be ideref or a future: "
-                 (short-ds r)))
-        (original r)))
+;   #'clojure.core/deref
+;    (fn clojure.core$deref
+;      [original the-var]
+;      (fn wrapper 
+;        [& [r :as all]]
+;        ; should support 3 args also
+;        (check-nargs #{1} the-var all)
+;        (when-not (or (instance? clojure.lang.IDeref r)
+;                      (instance? java.util.concurrent.Future r))
+;          (error "First argument to clojure.core/deref must be ideref or a future: "
+;                 (short-ds r)))
+;        (original r)))
    })
 
 ;(t/ann new-var-inlines (t/Map Var [[Any * -> Any] -> [Any * -> Any]]))
