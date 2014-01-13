@@ -3,7 +3,7 @@
 Lint your Clojure programs as they run.
 
 ```
-[com.ambrosebs/dynalint "0.1.0"]
+[com.ambrosebs/dynalint "0.1.1"]
 ```
 
 Dynalint is a simplistic linter that wraps operations in runtime checks.
