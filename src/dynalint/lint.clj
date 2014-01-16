@@ -1250,7 +1250,7 @@
           (let [rhs `(let [gs# ~i]
                        (tc-ignore
                          (when-not (seq-succeeds? gs#)
-                           (error vsym " initial binding must be seqable: "
+                           (error '~vsym " initial binding must be seqable: "
                                   (class gs#))))
                        gs#)]
             (recur ne (conj new-exprs b rhs))))
