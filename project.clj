@@ -3,7 +3,7 @@
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
   :dependencies [[org.clojure/clojure "1.5.1"]
-                 #_[org.clojure/core.typed "0.2.22-20140108.041125-4"]]
+                 #_[org.clojure/core.typed "0.2.25"]]
   :repositories {"sonatype-oss-public" "https://oss.sonatype.org/content/groups/public/"}
   :profiles {:dev {:repl-options {:port 64476}}}
   )

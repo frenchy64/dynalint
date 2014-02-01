@@ -279,3 +279,8 @@
   (is (deref (reify
                java.util.concurrent.Future
                (get [_] true)))))
+
+(deftest zipmap-test
+  (is
+    (zipmap (keys {1 2})
+            (vals {1 2}))))

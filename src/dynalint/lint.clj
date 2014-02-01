@@ -22,6 +22,9 @@
   `(do :core.typed/tc-ignore
        ~@body))
 
+;(t/ann dynalint-meta Any)
+(def dynalint-meta ::dynalint-meta)
+
 ;(t/ann corrupt-vars (t/Atom1 (t/Set (Var Nothing Any))))
 (def ^:private corrupt-vars (atom #{}))
 
@@ -35,10 +38,10 @@
   (symbol (str (ns-name (.ns v))) (str (.sym v))))
 
 (def error-history
-  (atom {}))
+  (atom (sorted-map)))
 
 (def warning-history
-  (atom {}))
+  (atom (sorted-map)))
 
 (defn add-error [id e]
   (swap! error-history assoc id e))
@@ -61,6 +64,9 @@
     (throw e)))
 
 (defn print-error
+  ([]
+   (when-let [[_ e] (last @error-history)]
+     (repl/pst e)))
   ([id]
    (when-let [e (@error-history id)]
      (repl/pst e)))
@@ -69,6 +75,9 @@
      (repl/pst e depth))))
 
 (defn print-warning
+  ([]
+   (when-let [[_ e] (last @warning-history)]
+     (repl/pst e)))
   ([id]
    (when-let [e (@warning-history id)]
      (repl/pst e)))
@@ -638,6 +647,12 @@
         (when-not ((some-fn sequential? nil?) ks vs)
           (warn "clojure.core/zipmap arguments should be sequential or nil: "
                 (short-ds ks) ", " (short-ds vs)))
+        (when (or (instance? clojure.lang.APersistentMap$KeySeq ks)
+                  (instance? clojure.lang.APersistentMap$KeySeq vs))
+          (warn "Should not pass result of clojure.core/keys to zipmap"))
+        (when (or (instance? clojure.lang.APersistentMap$ValSeq ks)
+                  (instance? clojure.lang.APersistentMap$ValSeq vs))
+          (warn "Should not pass result of clojure.core/vals to zipmap"))
         (apply original all)))
    #'clojure.core/reverse
     (fn clojure.core$reverse
@@ -1185,18 +1200,24 @@
 ;        [& [:as all]]
 ;        (check-nargs #{2 3} the-var all)
 ;        (apply original all)))
-;   #'clojure.core/deref
-;    (fn clojure.core$deref
-;      [original the-var]
-;      (fn wrapper 
-;        [& [r :as all]]
-;        ; should support 3 args also
-;        (check-nargs #{1} the-var all)
-;        (when-not (or (instance? clojure.lang.IDeref r)
-;                      (instance? java.util.concurrent.Future r))
-;          (error "First argument to clojure.core/deref must be ideref or a future: "
-;                 (short-ds r)))
-;        (original r)))
+   #'clojure.core/deref
+    (fn clojure.core$deref
+      [original the-var]
+      (fn wrapper 
+        [& [r :as all]]
+        ; should support 3 args also
+        (check-nargs #{1 3} the-var all)
+        (when (#{1} (count all))
+          (when-not (or (instance? clojure.lang.IDeref r)
+                        (instance? java.util.concurrent.Future r))
+            (error "First argument to clojure.core/deref must be IDeref or a future: "
+                   (short-ds r))))
+        (when (#{3} (count all))
+          (when-not (or (instance? clojure.lang.IBlockingDeref r)
+                        (instance? java.util.concurrent.Future r))
+            (error "First argument to clojure.core/deref must be IBlockingDeref or a future: "
+                   (short-ds r))))
+        (apply original all)))
    })
 
 ;(t/ann new-var-inlines (t/Map Var [[Any * -> Any] -> [Any * -> Any]]))
@@ -1256,6 +1277,7 @@
             (recur ne (conj new-exprs b rhs))))
       new-exprs)))
 
+; TODO check :or is a map
 ;(defn validate-destructure-syntax [s]
 ;  (cond
 ;    (vector? s)
