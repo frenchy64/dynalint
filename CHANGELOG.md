@@ -1,3 +1,7 @@
+# 0.1.3 - 2 Feb 2014
+
+- erase zipmap warnings (see CLJ-1302)
+
 # 0.1.2 - 1 Feb 2014
 
 - `print-{warning,error}` now accept zero arguments to print the latest error/warning
