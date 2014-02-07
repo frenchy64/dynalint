@@ -647,12 +647,6 @@
         (when-not ((some-fn sequential? nil?) ks vs)
           (warn "clojure.core/zipmap arguments should be sequential or nil: "
                 (short-ds ks) ", " (short-ds vs)))
-        (when (or (instance? clojure.lang.APersistentMap$KeySeq ks)
-                  (instance? clojure.lang.APersistentMap$KeySeq vs))
-          (warn "Should not pass result of clojure.core/keys to zipmap"))
-        (when (or (instance? clojure.lang.APersistentMap$ValSeq ks)
-                  (instance? clojure.lang.APersistentMap$ValSeq vs))
-          (warn "Should not pass result of clojure.core/vals to zipmap"))
         (apply original all)))
    #'clojure.core/reverse
     (fn clojure.core$reverse
