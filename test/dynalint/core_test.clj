@@ -4,6 +4,9 @@
   (:require [clojure.set :as set]
             [dynalint.lint :as dyn :refer :all]))
 
+; TODO each dynalint error should have a corresponding test for the
+; "bad" error that would happen otherwise, with the linter disabled
+
 (lint)
 
 #_(deftest scratch

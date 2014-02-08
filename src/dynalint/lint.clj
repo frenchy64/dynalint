@@ -54,16 +54,32 @@
 (defn inc-id []
   (swap! id inc))
 
+(declare prettify-stack-trace drop-until-stack-entry)
+
 (defn error [& args]
   (let [id (inc-id)
-        e (ex-info
-            (apply str "ERROR " (str "(Dynalint id " id "): ") args)
-            {::dynalint true
-             ::error true})]
+        msg (apply str "ERROR " (str "(Dynalint id " id "): ") args)
+        e (->
+            (try
+              (throw
+                (ex-info
+                  msg
+                  {::dynalint true
+                   ::error true
+                   ::id id}))
+              (catch clojure.lang.ExceptionInfo e
+                e))
+            ; we want dynalint.lint/error at the top
+            (prettify-stack-trace 
+              :process-entries (drop-until-stack-entry 'dynalint.lint/error)))]
     (add-error id e)
     (throw e)))
 
 (defn print-error
+  "Print information on a Dynalint error. If id
+  is provided, print error with that Dynalint ID,
+  otherwise default to the latest error. Use depth
+  to specify the depth of the stack trace printed."
   ([]
    (when-let [[_ e] (last @error-history)]
      (repl/pst e)))
@@ -75,6 +91,10 @@
      (repl/pst e depth))))
 
 (defn print-warning
+  "Print information on a Dynalint warning. If id
+  is provided, print warning with that Dynalint ID,
+  otherwise default to the latest warning. Use depth
+  to specify the depth of the stack trace printed."
   ([]
    (when-let [[_ e] (last @warning-history)]
      (repl/pst e)))
@@ -85,11 +105,61 @@
    (when-let [e (@warning-history id)]
      (repl/pst e depth))))
 
-(defn check-nargs 
+(declare errors-disabled?)
+
+(def ^:dynamic *disable-warnings-in* false)
+(def ^:dynamic *disable-errors-in* false)
+
+(defmacro with-disabled-linting 
+  [& args]
+  `(do
+     (push-thread-bindings
+       {#'*disable-warnings-in* true
+        #'*disable-errors-in* true})
+     (try
+       (do ~@args)
+       (finally
+         (pop-thread-bindings)))))
+
+(defmacro when-errors-enabled [& args]
+  `(when-not (errors-disabled?)
+     (with-disabled-linting
+       ~@args)))
+
+(defmacro when-warnings-enabled [& args]
+  `(when-not (warnings-disabled?)
+     (with-disabled-linting
+       ~@args)))
+
+(defmacro warn-if [p & args]
+  `(when-warnings-enabled
+     (when ~p
+       (warn ~@args))))
+
+(defmacro warn-if-not [p & args]
+  `(when-warnings-enabled
+     (when-not ~p
+       (warn ~@args))))
+
+(defmacro error-if [p & args]
+  `(when-errors-enabled
+     (when ~p
+       (error ~@args))))
+
+(defmacro error-if-not [p & args]
+  `(when-errors-enabled
+     (when-not ~p
+       (error ~@args))))
+
+
+(defn check-nargs*
   [expectedfn the-var args]
-  (when-not (expectedfn (count args))
-    (error "Wrong number of arguments to " (var->symbol the-var) ": "
-           (count args))))
+  (error-if-not (expectedfn (count args))
+    "Wrong number of arguments to " (var->symbol the-var) ": "
+    (count args)))
+
+(defmacro check-nargs [& args]
+  `(check-nargs* ~@args))
 
 ;(t/ann already-linted? [Any -> Boolean])
 (defn ^:private already-linted?
@@ -167,22 +237,131 @@
     (println r))
   (flush))
 
+(defn prettify-stack-trace [^Throwable e & {:keys [process-entries]}]
+  (letfn [(wrapper-marker? [^String s]
+            {:pre [(or (nil? s) (string? s))]}
+            ;(prn "wrapper-marker?" s)
+            (when s
+              (.startsWith s "wrapper")))
+          (ste-for-var [^clojure.lang.Var v]
+            {:pre [(var? v)]
+             :post [(or (nil? %)
+                        (instance? StackTraceElement %))]}
+            (let [{:keys [ns name line file]} (meta v)]
+              (let [file-name (when file 
+                                (last (str/split file #"/")))]
+                ;(prn "file-name" file-name)
+                (when (and ns name line file-name)
+                  (StackTraceElement.
+                    (str (namespace-munge ns) "$" (.sym v))
+                    (str 'invoke)
+                    file-name
+                    line)))))
+          (process-ste [^StackTraceElement ste]
+            {:pre [(instance? StackTraceElement ste)]
+             :post [(or (nil? %)
+                        (instance? StackTraceElement %))]}
+            (let [clstr (.getClassName ste)
+                  [nstr wrapper-of innermarker :as allcls]
+                  (->> (partition-by #{\$} clstr)
+                       (map (partial apply str))
+                       (remove #{"$"}))
+                 ; _ (prn "in dynalint marker" allcls)
+                 ; _ (prn "original clstr" clstr)
+                 ; _ (prn "nstr" nstr)
+                 ; _ (prn "wrapper-of" wrapper-of)
+                 ; _ (prn "innermarker" innermarker)
+                  ]
+              (if-not (and (= "dynalint.lint" nstr)
+                           (wrapper-marker? innermarker))
+                ste
+                (let [;_ (prn "is a wrapper..")
+                      [munged-ns munged-name] (str/split wrapper-of #"_SLASH_")
+                      demunged-ns (str (str/replace munged-ns #"_DOT_" "."))
+                      demunged-name (str (repl/demunge munged-name))
+                      wrapping-varsym (symbol demunged-ns demunged-name)
+                      ;_ (prn "demunged varsym" wrapping-varsym)
+                      v (when (find-ns (symbol demunged-ns))
+                          (find-var wrapping-varsym))
+                      ;_ (prn ".. of var" v)
+                      ]
+                  (if-not (var? v)
+                    ste 
+                    (or 
+                      (ste-for-var v)
+                      ste))))))]
+    (doto e
+      (.setStackTrace
+        (into-array 
+          StackTraceElement
+          (let [es (->> 
+                     (map process-ste (.getStackTrace e))
+                     (remove nil?))]
+            ((or process-entries identity) es)))))))
+
+(defn drop-until-stack-entry [clsym]
+  #(drop-while 
+     (fn [^StackTraceElement el]
+       (not= (repl/demunge (.getClassName el))
+             (str clsym)))
+     %))
+
+(def ^clojure.lang.Atom disable-warnings 
+  "If set to true, skip all warning checks installed by Dynalint.
+  Defaults to false"
+  (atom false))
+(def ^clojure.lang.Atom disable-errors 
+  "If set to true, skip all error checks installed by Dynalint.
+  Defaults to false"
+  (atom false))
+
+(defn errors-disabled? []
+  (or 
+    ; must be very careful calling c.c/deref here
+    (.deref disable-errors)
+    *disable-errors-in*))
+
+(defn warnings-disabled? []
+  (or 
+    ; must be very careful calling c.c/deref here
+    (.deref disable-warnings)
+    *disable-warnings-in*))
+
+(def last-warning-nano-time (atom Long/MIN_VALUE))
+
+(def warning-interval
+  "Miniumum number of seconds between warnings."
+  (atom 1))
+
+(defn should-throw-warning? []
+  (let [curr (System/nanoTime)
+        next-warning-time (+' (*' 1e9 @warning-interval) @last-warning-nano-time)]
+    (if (< next-warning-time curr)
+      (do (reset! last-warning-nano-time curr)
+          true)
+      false)))
+
 ;used in macros
 ;(t/ann warn [Any * -> Any])
 (defn ^:skip-wiki warn [& args]
-  (let [id (inc-id)
-        msg (print-str "WARNING" (str "(Dynalint id " id "): ") 
-                       (apply str args))
-        e (try (throw (ex-info
-                        msg
-                        {::dynalint true
-                         ::warning true
-                         ::id id}))
-               (catch clojure.lang.ExceptionInfo e
-                 e))]
-    (add-warning id e)
-    (println msg)
-    (flush)))
+  (when (should-throw-warning?)
+    (let [id (inc-id)
+          msg (print-str "WARNING" (str "(Dynalint id " id "): ") 
+                         (apply str args))
+          e (->
+              (try (throw (ex-info
+                            msg
+                            {::dynalint true
+                             ::warning true
+                             ::id id}))
+                   (catch clojure.lang.ExceptionInfo e
+                     e))
+              ; we want dynalint.lint/warn at the top
+              (prettify-stack-trace 
+                :process-entries (drop-until-stack-entry 'dynalint.lint/warn)))]
+      (add-warning id e)
+      (println msg)
+      (flush))))
 
 ;used in macros
 ;(t/ann ^:no-check short-ds [Any -> Any])
@@ -295,168 +474,160 @@
 ;(t/ann new-var-mappings (t/Map Var [[Any * -> Any] (Var Nothing Any) -> [Any * -> Any]]))
 (def ^:private new-var-mappings
   {#'clojure.core/keys
-    (fn clojure.core$keys
+    (fn clojure.core_SLASH_keys
       [original this-var]
       (fn wrapper
         [& [map :as all]]
         (check-nargs #{1} this-var all)
-        (when-not (seq-succeeds? map)
-          (error "First argument to clojure.core/keys must be seqable: "
-                 (short-ds map)))
+        (error-if-not (seq-succeeds? map)
+          "First argument to clojure.core/keys must be seqable: "
+          (short-ds map))
         (when-not ((some-fn nil? map?) map)
           (warn "Calling clojure.core/keys with non-map: "
                 (short-ds map)))
         (apply original all)))
    #'clojure.core/vals
-    (fn clojure.core$vals
+    (fn clojure.core_SLASH_vals
       [original this-var]
       (fn wrapper
         [& [map :as all]]
         (check-nargs #{1} this-var all)
-        (when-not (seq-succeeds? map)
-          (error "First argument to clojure.core/vals must be seqable: "
-                 (short-ds map)))
+        (error-if-not (seq-succeeds? map)
+          "First argument to clojure.core/vals must be seqable: "
+          (short-ds map))
         (when-not ((some-fn nil? map?) map)
           (warn "Calling clojure.core/vals with non-map: "
                 (short-ds map)))
         (apply original all)))
    #'clojure.core/key
-    (fn clojure.core$key
+    (fn clojure.core_SLASH_key
       [original this-var]
       (fn wrapper
         [& [e :as all]]
         (check-nargs #{1} this-var all)
-        (when-not (instance? java.util.Map$Entry e)
-          (error "First argument to clojure.core/key must be a map entry: "
-                 (short-ds e)))
+        (error-if-not (instance? java.util.Map$Entry e)
+          "First argument to clojure.core/key must be a map entry: "
+          (short-ds e))
         (original e)))
    #'clojure.core/val
-    (fn clojure.core$val
+    (fn clojure.core_SLASH_val
       [original this-var]
       (fn wrapper
         [& [e :as all]]
         (check-nargs #{1} this-var all)
-        (when-not (instance? java.util.Map$Entry e)
-          (error "First argument to clojure.core/val must be a map entry: "
-                 (short-ds e)))
+        (error-if-not (instance? java.util.Map$Entry e)
+          "First argument to clojure.core/val must be a map entry: "
+          (short-ds e))
         (original e)))
    #'clojure.core/rseq
-    (fn clojure.core$rseq
+    (fn clojure.core_SLASH_rseq
       [original this-var]
       (fn wrapper
         [& [rev :as all]]
         (check-nargs #{1} this-var all)
-        (when-not (reversible? rev)
-          (error "First argument to clojure.core/rseq must be reversible: "
-                 (short-ds rev)))
+        (error-if-not (reversible? rev)
+          "First argument to clojure.core/rseq must be reversible: "
+          (short-ds rev))
         (original rev)))
    #'clojure.core/name
-    (fn clojure.core$name
+    (fn clojure.core_SLASH_name
       [original this-var]
       (fn wrapper
         [& [x :as all]]
         (check-nargs #{1} this-var all)
-        (when-not ((some-fn #(instance? clojure.lang.Named %) string?)
-                   x)
-          (error "First argument to clojure.core/name must be string or named: "
-                 (short-ds x)))
+        (error-if-not ((some-fn #(instance? clojure.lang.Named %) string?) x)
+          "First argument to clojure.core/name must be string or named: "
+          (short-ds x))
         (original x)))
    #'clojure.core/namespace
-    (fn clojure.core$namespace
+    (fn clojure.core_SLASH_namespace
       [original this-var]
       (fn wrapper
         [& [x :as all]]
         (check-nargs #{1} this-var all)
-        (when-not ((some-fn #(instance? clojure.lang.Named %))
-                   x)
-          (error "First argument to clojure.core/namespace must be named: "
-                 (short-ds x)))
+        (error-if-not ((some-fn #(instance? clojure.lang.Named %)) x)
+          "First argument to clojure.core/namespace must be named: "
+          (short-ds x))
         (original x)))
    #'clojure.core/remove-all-methods
-    (fn clojure.core$remove-all-methods
+    (fn clojure.core_SLASH_remove-all-methods
       [original this-var]
       (fn wrapper
         [& [multifn :as all]]
         (check-nargs #{1} this-var all)
-        (when-not ((some-fn #(instance? clojure.lang.MultiFn %))
-                   multifn)
-          (error "First argument to clojure.core/remove-all-methods must be a multimethod: "
-                 (short-ds multifn)))
+        (error-if-not ((some-fn #(instance? clojure.lang.MultiFn %)) multifn)
+          "First argument to clojure.core/remove-all-methods must be a multimethod: "
+          (short-ds multifn))
         (apply original all)))
    #'clojure.core/remove-method
-    (fn clojure.core$remove-method
+    (fn clojure.core_SLASH_remove-method
       [original this-var]
       (fn wrapper
         [& [multifn dispatch-val :as all]]
         (check-nargs #{2} this-var all)
-        (when-not ((some-fn #(instance? clojure.lang.MultiFn %))
-                   multifn)
-          (error "First argument to clojure.core/remove-method must be a multimethod: "
-                 (short-ds multifn)))
+        (error-if-not ((some-fn #(instance? clojure.lang.MultiFn %)) multifn)
+          "First argument to clojure.core/remove-method must be a multimethod: "
+          (short-ds multifn))
         (apply original all)))
    #'clojure.core/prefer-method
-    (fn clojure.core$prefer-method
+    (fn clojure.core_SLASH_prefer-method
       [original this-var]
       (fn wrapper
         [& [multifn dispatch-val-x dispatch-val-y :as all]]
         (check-nargs #{3} this-var all)
-        (when-not ((some-fn #(instance? clojure.lang.MultiFn %))
-                   multifn)
-          (error "First argument to clojure.core/prefer-method must be a multimethod: "
-                 (short-ds multifn)))
+        (error-if-not ((some-fn #(instance? clojure.lang.MultiFn %)) multifn)
+          "First argument to clojure.core/prefer-method must be a multimethod: "
+          (short-ds multifn))
         (apply original all)))
    #'clojure.core/methods
-    (fn clojure.core$methods
+    (fn clojure.core_SLASH_methods
       [original this-var]
       (fn wrapper
         [& [multifn dispatch-val-x dispatch-val-y :as all]]
         (check-nargs #{1} this-var all)
-        (when-not ((some-fn #(instance? clojure.lang.MultiFn %))
-                   multifn)
-          (error "First argument to clojure.core/methods must be a multimethod: "
-                 (short-ds multifn)))
+        (error-if-not ((some-fn #(instance? clojure.lang.MultiFn %)) multifn)
+          "First argument to clojure.core/methods must be a multimethod: "
+          (short-ds multifn))
         (apply original all)))
    #'clojure.core/get-method
-    (fn clojure.core$get-method
+    (fn clojure.core_SLASH_get-method
       [original this-var]
       (fn wrapper
         [& [multifn dispatch-val :as all]]
         (check-nargs #{2} this-var all)
-        (when-not ((some-fn #(instance? clojure.lang.MultiFn %))
-                   multifn)
-          (error "First argument to clojure.core/get-method must be a multimethod: "
-                 (short-ds multifn)))
+        (error-if-not ((some-fn #(instance? clojure.lang.MultiFn %)) multifn)
+          "First argument to clojure.core/get-method must be a multimethod: "
+          (short-ds multifn))
         (apply original all)))
    #'clojure.core/prefers
-    (fn clojure.core$prefers
+    (fn clojure.core_SLASH_prefers
       [original this-var]
       (fn wrapper
         [& [multifn :as all]]
         (check-nargs #{1} this-var all)
-        (when-not ((some-fn #(instance? clojure.lang.MultiFn %))
-                   multifn)
-          (error "First argument to clojure.core/prefers must be a multimethod: "
-                 (short-ds multifn)))
+        (error-if-not ((some-fn #(instance? clojure.lang.MultiFn %)) multifn)
+          "First argument to clojure.core/prefers must be a multimethod: "
+          (short-ds multifn))
         (apply original all)))
    #'clojure.core/find-var
-    (fn clojure.core$find-var
+    (fn clojure.core_SLASH_find-var
       [original this-var]
       (fn wrapper
         [& [sym :as all]]
         (check-nargs #{1} this-var all)
-        (when-not (symbol? sym)
-          (error "First argument to clojure.core/find-var must be a symbol: "
-                 (short-ds sym)))
-        (when-not (namespace sym)
-          (error "First argument to clojure.core/find-var must be namespace qualified: "
-                 (short-ds sym)))
-        (when-not (find-ns (symbol (namespace sym)))
-          (error "First argument to clojure.core/find-var must have a namespace that exists"
-                 " (no such namespace " (namespace sym) "): "
-                 (short-ds sym)))
+        (error-if-not (symbol? sym)
+          "First argument to clojure.core/find-var must be a symbol: "
+          (short-ds sym))
+        (error-if-not (namespace sym)
+          "First argument to clojure.core/find-var must be namespace qualified: "
+          (short-ds sym))
+        (error-if-not (find-ns (symbol (namespace sym)))
+          "First argument to clojure.core/find-var must have a namespace that exists"
+          " (no such namespace " (namespace sym) "): "
+          (short-ds sym))
         (apply original all)))
    #'clojure.core/agent
-    (fn clojure.core$agent
+    (fn clojure.core_SLASH_agent
       [original this-var]
       (fn wrapper
         [& [i & opts :as all]]
@@ -496,7 +667,7 @@
            })
         (apply original all)))
    #'clojure.core/ref
-    (fn clojure.core$ref
+    (fn clojure.core_SLASH_ref
       [original this-var]
       (fn wrapper
         [& [i & opts :as all]]
@@ -536,27 +707,27 @@
            })
         (apply original all)))
    #'clojure.core/set-agent-send-executor!
-    (fn clojure.core$set-agent-send-executor!
+    (fn clojure.core_SLASH_set-agent-send-executor!
       [original this-var]
       (fn wrapper
         [& [exs :as all]]
         (check-nargs #{1} this-var all)
-        (when-not (instance? java.util.concurrent.ExecutorService exs)
-          (error "First argument to clojure.core/set-agent-send-off-executor! must be an executor service: "
-                 (short-ds exs)))
+        (error-if-not (instance? java.util.concurrent.ExecutorService exs)
+          "First argument to clojure.core/set-agent-send-off-executor! must be an executor service: "
+          (short-ds exs))
         (apply original all)))
    #'clojure.core/set-agent-send-off-executor!
-    (fn clojure.core$set-agent-send-off-executor!
+    (fn clojure.core_SLASH_set-agent-send-off-executor!
       [original this-var]
       (fn wrapper
         [& [exs :as all]]
         (check-nargs #{1} this-var all)
-        (when-not (instance? java.util.concurrent.ExecutorService exs)
-          (error "First argument to clojure.core/set-agent-send-off-executor! must be an executor service: "
-                 (short-ds exs)))
+        (error-if-not (instance? java.util.concurrent.ExecutorService exs)
+          "First argument to clojure.core/set-agent-send-off-executor! must be an executor service: "
+          (short-ds exs))
         (apply original all)))
    #'clojure.core/dissoc
-    (fn clojure.core$dissoc
+    (fn clojure.core_SLASH_dissoc
       [original this-var]
       (fn wrapper
         [& [m & ks :as all]]
@@ -570,15 +741,12 @@
                 (short-ds m)))
         ; give a better error for more than 1 argument, this will always
         ; fail if given anything other than a map or nil
-        (when (and (seq ks)
-                   (not 
-                     ((some-fn map? nil?)
-                      m)))
-          (error "clojure.core/dissoc first argument must be a map: "
-                 (short-ds m)))
+        (error-if (and (seq ks) (not ((some-fn map? nil?) m)))
+          "clojure.core/dissoc first argument must be a map: "
+          (short-ds m))
         (apply original all)))
    #'clojure.core/update-in
-    (fn clojure.core$update-in
+    (fn clojure.core_SLASH_update-in
       [original this-var]
       (fn wrapper
         [& [m ks f & args :as all]]
@@ -592,39 +760,38 @@
                   (short-ds ks))))
         (apply original all)))
    #'clojure.core/assoc-in
-    (fn clojure.core$assoc-in
+    (fn clojure.core_SLASH_assoc-in
       [original this-var]
       (fn wrapper
         [& [m ks v :as all]]
         (check-nargs #{3} this-var all)
-        (when-not (seq ks)
-          (warn "clojure.core/assoc-in key path should be non-empty: "
-                (short-ds ks)))
+        (warn-if (empty? ks) 
+          "clojure.core/assoc-in key path should be non-empty: "
+          (short-ds ks))
         (apply original all)))
    #'clojure.core/get-in
-    (fn clojure.core$get-in
+    (fn clojure.core_SLASH_get-in
       [original this-var]
       (fn wrapper
         [& [m ks :as all]]
         (check-nargs #{2 3} this-var all)
-        (when-not (seq-succeeds? ks)
-          (error 
-            "Second argument to clojure.core/get-in must be seqable: "
-            (short-ds ks)))
+        (error-if-not (seq-succeeds? ks)
+          "Second argument to clojure.core/get-in must be seqable: "
+          (short-ds ks))
         (when ((every-pred seq-succeeds? empty?) 
                ks)
           (warn "clojure.core/get-in key path should be non-empty: "
                 (short-ds ks)))
         (apply original all)))
    #'clojure.core/select-keys
-    (fn clojure.core$select-keys
+    (fn clojure.core_SLASH_select-keys
       [original this-var]
       (fn wrapper
         [& [m keyseq :as all]]
         (check-nargs #{2} this-var all)
-        (when-not (seq-succeeds? keyseq)
-          (error "Second argument to clojure.core/select-keys must be seqable: "
-                 (short-ds keyseq)))
+        (error-if-not (seq-succeeds? keyseq)
+          "Second argument to clojure.core/select-keys must be seqable: "
+          (short-ds keyseq))
         (when-not (instance? java.util.Map m)
           (if (or (nil? m) (empty? keyseq))
             (warn "clojure.core/select-keys first argument should be a map: "
@@ -633,35 +800,35 @@
                    (short-ds m))))
         (apply original all)))
    #'clojure.core/zipmap
-    (fn clojure.core$zipmap
+    (fn clojure.core_SLASH_zipmap
       [original this-var]
       (fn wrapper
         [& [ks vs :as all]]
         (check-nargs #{2} this-var all)
-        (when-not (seq-succeeds? ks)
-          (error "First argument to clojure.core/zipmap must be seqable: "
-                 (short-ds ks)))
-        (when-not (seq-succeeds? vs)
-          (error "Second argument to clojure.core/zipmap must be seqable: "
-                 (short-ds vs)))
+        (error-if-not (seq-succeeds? ks)
+          "First argument to clojure.core/zipmap must be seqable: "
+          (short-ds ks))
+        (error-if-not (seq-succeeds? vs)
+          "Second argument to clojure.core/zipmap must be seqable: "
+          (short-ds vs))
         (when-not ((some-fn sequential? nil?) ks vs)
           (warn "clojure.core/zipmap arguments should be sequential or nil: "
                 (short-ds ks) ", " (short-ds vs)))
         (apply original all)))
    #'clojure.core/reverse
-    (fn clojure.core$reverse
+    (fn clojure.core_SLASH_reverse
       [original this-var]
       (fn wrapper[& [rev :as all]]
         (check-nargs #{1} this-var all)
-        (when-not (seq-succeeds? rev)
-          (error "First argument to clojure.core/reverse must be seqable: "
-                 (short-ds rev)))
+        (error-if-not (seq-succeeds? rev)
+          "First argument to clojure.core/reverse must be seqable: "
+          (short-ds rev))
         (when (reversible? rev)
           (warn "clojure.core/reverse argument is reversible, consider clojure.core/rseq: "
                 (short-ds rev)))
         (apply original all)))
    #'clojure.core/unchecked-inc
-     (fn clojure.core$unchecked-inc
+     (fn clojure.core_SLASH_unchecked-inc
        [original this-var]
        (fn wrapper
          [& [x :as all]]
@@ -673,7 +840,7 @@
                    " (" (class x) ")"))
            res)))
    #'clojure.core/unchecked-add
-     (fn clojure.core$unchecked-add
+     (fn clojure.core_SLASH_unchecked-add
        [original this-var]
        (fn wrapper
          [& [x y :as all]]
@@ -687,7 +854,7 @@
                           (instance? Long y)) 
                        (let [^long x1 x
                              ^long y1 y]
-                         (prn 'special-add)
+                         ;(prn 'special-add)
                          (clojure.lang.Numbers/unchecked_add x y))
                      :else (clojure.lang.Numbers/unchecked_add x y))]
            (when-not (< (+ x y) res)
@@ -697,7 +864,7 @@
                    (short-ds res) " (" (class x) ")"))
            res)))
    #'clojure.set/union
-    (fn clojure.set$union
+    (fn clojure.set_SLASH_union
       [original this-var]
       (fn wrapper
         [& [:as all]]
@@ -707,7 +874,7 @@
                   (short-ds s))))
         (apply original all)))
    #'clojure.set/intersection
-    (fn clojure.set$intersection
+    (fn clojure.set_SLASH_intersection
       [original this-var]
       (fn wrapper
         [& [:as all]]
@@ -718,7 +885,7 @@
                   (short-ds s))))
         (apply original all)))
    #'clojure.set/difference
-    (fn clojure.set$difference
+    (fn clojure.set_SLASH_difference
       [original this-var]
       (fn wrapper
         [& [:as all]]
@@ -729,7 +896,7 @@
                   (short-ds s))))
         (apply original all)))
    #'clojure.set/select
-    (fn clojure.set$select
+    (fn clojure.set_SLASH_select
       [original this-var]
       (fn wrapper
         [& [pred xset :as all]]
@@ -739,7 +906,7 @@
                 (short-ds xset)))
         (apply original all)))
    #'clojure.set/project
-    (fn clojure.set$project
+    (fn clojure.set_SLASH_project
       [original this-var]
       (fn wrapper
         [& [xrel ks :as all]]
@@ -749,7 +916,7 @@
                 (short-ds xrel)))
         (apply original all)))
    #'clojure.set/rename-keys
-    (fn clojure.set$rename-keys
+    (fn clojure.set_SLASH_rename-keys
       [original this-var]
       (fn wrapper
         [& [m kmap :as all]]
@@ -762,7 +929,7 @@
                 (short-ds kmap)))
         (apply original all)))
    #'clojure.set/rename
-    (fn clojure.set$rename
+    (fn clojure.set_SLASH_rename
       [original this-var]
       (fn wrapper
         [& [xrel kmap :as all]]
@@ -775,7 +942,7 @@
                 (short-ds kmap)))
         (apply original all)))
    #'clojure.set/index
-    (fn clojure.set$index
+    (fn clojure.set_SLASH_index
       [original this-var]
       (fn wrapper
         [& [xrel ks :as all]]
@@ -785,7 +952,7 @@
                 (short-ds xrel)))
         (apply original all)))
    #'clojure.set/map-invert
-    (fn clojure.set$map-invert
+    (fn clojure.set_SLASH_map-invert
       [original this-var]
       (fn wrapper
         [& [m :as all]]
@@ -795,7 +962,7 @@
                 (short-ds m)))
         (apply original all)))
    #'clojure.set/join
-    (fn clojure.set$join
+    (fn clojure.set_SLASH_join
       [original this-var]
       (fn wrapper
         [& [xrel yrel km :as all]]
@@ -813,7 +980,7 @@
                   (short-ds km))))
         (apply original all)))
    #'clojure.set/subset?
-    (fn clojure.core$subset?
+    (fn clojure.core_SLASH_subset?
       [original this-var]
       (fn wrapper
         [& [:as all]]
@@ -823,7 +990,7 @@
                   (short-ds s))))
         (apply original all)))
    #'clojure.set/superset?
-    (fn clojure.set$superset?
+    (fn clojure.set_SLASH_superset?
       [original this-var]
       (fn wrapper
         [& [:as all]]
@@ -833,164 +1000,153 @@
                   (short-ds s))))
         (apply original all)))
    #'clojure.core/meta
-    (fn clojure.core$meta
+    (fn clojure.core_SLASH_meta
       [original this-var]
       (fn wrapper
         [& [x m :as all]]
         (check-nargs #{1} this-var all)
         (apply original all)))
    #'clojure.core/with-meta
-    (fn clojure.core$with-meta
+    (fn clojure.core_SLASH_with-meta
       [original this-var]
       (fn wrapper
         [& [x m :as all]]
         (check-nargs #{2} this-var all)
-        (when-not (instance? clojure.lang.IMeta x)
-          (error "First argument to clojure.core/with-meta must implement clojure.lang.IMeta: "
-                 (short-ds x)))
-        (when-not ((some-fn map? nil?) m)
-          (error "Second argument to clojure.core/with-meta must be a map or nil: "
-                 (short-ds m)))
+        (error-if-not (instance? clojure.lang.IMeta x)
+          "First argument to clojure.core/with-meta must implement clojure.lang.IMeta: "
+          (short-ds x))
+        (error-if-not ((some-fn map? nil?) m)
+          "Second argument to clojure.core/with-meta must be a map or nil: "
+          (short-ds m))
         (apply original all)))
    #'clojure.core/last
-    (fn clojure.core$last
+    (fn clojure.core_SLASH_last
       [original this-var]
       (fn wrapper
         [& [the-seq :as all]]
         (check-nargs #{1} this-var all)
-        (when-not (seq-succeeds? the-seq)
-          (error 
-            "First argument to clojure.core/last must be seqable: "
-            (short-ds the-seq)))
+        (error-if-not (seq-succeeds? the-seq)
+          "First argument to clojure.core/last must be seqable: "
+          (short-ds the-seq))
         (original the-seq)))
    #'clojure.core/butlast
-    (fn clojure.core$butlast
+    (fn clojure.core_SLASH_butlast
       [original this-var]
       (fn wrapper
         [& [the-seq :as all]]
         (check-nargs #{1} this-var all)
-        (when-not (seq-succeeds? the-seq)
-          (error 
-            "First argument to clojure.core/butlast must be seqable: "
-            (short-ds the-seq)))
+        (error-if-not (seq-succeeds? the-seq)
+          "First argument to clojure.core/butlast must be seqable: "
+          (short-ds the-seq))
         (original the-seq)))
    #'clojure.core/cons
-    (fn clojure.core$cons 
+    (fn clojure.core_SLASH_cons 
       [original this-var]
       (fn wrapper
         [& [x the-seq :as all]]
         (check-nargs #{2} this-var all)
-        (when-not (seq-succeeds? the-seq)
-          (error 
-            "Second argument to clojure.core/cons must be seqable: "
-            (short-ds the-seq)
-            " (instance of " (class the-seq) ")"))
+        (error-if-not (seq-succeeds? the-seq)
+          "Second argument to clojure.core/cons must be seqable: "
+          (short-ds the-seq)
+          " (instance of " (class the-seq) ")")
         (apply original all)))
    #'clojure.core/first
-    (fn clojure.core$first
+    (fn clojure.core_SLASH_first
       [original this-var]
       (fn wrapper
         [& [the-seq :as all]]
         (check-nargs #{1} this-var all)
-        (when-not (seq-succeeds? the-seq)
-          (error 
-            "First argument to clojure.core/first must be seqable: "
-            (short-ds the-seq)
-            " (instance of " (class the-seq) ")"))
+        (error-if-not (seq-succeeds? the-seq)
+          "First argument to clojure.core/first must be seqable: "
+          (short-ds the-seq)
+          " (instance of " (class the-seq) ")")
         (original the-seq)))
    #'clojure.core/second
-    (fn clojure.core$second
+    (fn clojure.core_SLASH_second
       [original this-var]
       (fn wrapper
         [& [the-seq :as all]]
         (check-nargs #{1} this-var all)
-        (when-not (seq-succeeds? the-seq)
-          (error 
-            "First argument to clojure.core/second must be seqable: "
-            (short-ds the-seq)))
+        (error-if-not (seq-succeeds? the-seq)
+          "First argument to clojure.core/second must be seqable: "
+          (short-ds the-seq))
         (original the-seq)))
    #'clojure.core/ffirst
-    (fn clojure.core$ffirst
+    (fn clojure.core_SLASH_ffirst
       [original this-var]
       (fn wrapper
         [& [the-seq :as all]]
         (check-nargs #{1} this-var all)
-        (when-not (seq-succeeds? the-seq)
-          (error 
-            "First argument to clojure.core/ffirst must be seqable: "
-            (short-ds the-seq)))
-        (when-not (seq-succeeds? (first the-seq))
-          (error 
-            "First argument to clojure.core/ffirst must have seqable first element: "
-            (short-ds (first the-seq))))
+        (error-if-not (seq-succeeds? the-seq)
+          "First argument to clojure.core/ffirst must be seqable: "
+          (short-ds the-seq))
+        (error-if-not (seq-succeeds? (first the-seq))
+          "First argument to clojure.core/ffirst must have seqable first element: "
+          (short-ds (first the-seq)))
         (original the-seq)))
    #'clojure.core/nfirst
-    (fn clojure.core$nfirst
+    (fn clojure.core_SLASH_nfirst
       [original this-var]
       (fn wrapper
         [& [the-seq :as all]]
         (check-nargs #{1} this-var all)
-        (when-not (seq-succeeds? the-seq)
-          (error 
-            "First argument to clojure.core/nfirst must be seqable: "
-            (short-ds the-seq)))
-        (when-not (seq-succeeds? (first the-seq))
-          (error 
-            "First argument to clojure.core/nfirst must have seqable first element: "
-            (short-ds (first the-seq))))
+        (error-if-not (seq-succeeds? the-seq)
+          "First argument to clojure.core/nfirst must be seqable: "
+          (short-ds the-seq))
+        (error-if-not (seq-succeeds? (first the-seq))
+          "First argument to clojure.core/nfirst must have seqable first element: "
+          (short-ds (first the-seq)))
         (original the-seq)))
    #'clojure.core/fnext
-    (fn clojure.core$fnext
+    (fn clojure.core_SLASH_fnext
       [original this-var]
       (fn wrapper
         [& [the-seq :as all]]
         (check-nargs #{1} this-var all)
-        (when-not (seq-succeeds? the-seq)
-          (error 
-            "First argument to clojure.core/fnext must be seqable: "
-            (short-ds the-seq)))
+        (error-if-not (seq-succeeds? the-seq)
+          "First argument to clojure.core/fnext must be seqable: "
+          (short-ds the-seq))
         (original the-seq)))
    #'clojure.core/nnext
-    (fn clojure.core$nnext
+    (fn clojure.core_SLASH_nnext
       [original this-var]
       (fn wrapper
         [& [the-seq :as all]]
         (check-nargs #{1} this-var all)
-        (when-not (seq-succeeds? the-seq)
-          (error 
-            "First argument to clojure.core/nnext must be seqable: "
-            (short-ds the-seq)))
+        (error-if-not (seq-succeeds? the-seq)
+          "First argument to clojure.core/nnext must be seqable: "
+          (short-ds the-seq))
         (original the-seq)))
    #'clojure.core/seq?
-    (fn clojure.core$seq?
+    (fn clojure.core_SLASH_seq?
       [original this-var]
       (fn wrapper
         [& [a :as all]]
         (check-nargs #{1} this-var all)
         (original a)))
    #'clojure.core/char?
-    (fn clojure.core$char?
+    (fn clojure.core_SLASH_char?
       [original this-var]
       (fn wrapper
         [& [a :as all]]
         (check-nargs #{1} this-var all)
         (original a)))
    #'clojure.core/string?
-    (fn clojure.core$string?
+    (fn clojure.core_SLASH_string?
       [original this-var]
       (fn wrapper
         [& [a :as all]]
         (check-nargs #{1} this-var all)
         (original a)))
    #'clojure.core/map?
-    (fn clojure.core$map?
+    (fn clojure.core_SLASH_map?
       [original this-var]
       (fn wrapper
         [& [a :as all]]
         (check-nargs #{1} this-var all)
         (original a)))
    #'clojure.core/vector?
-    (fn clojure.core$vector?
+    (fn clojure.core_SLASH_vector?
       [original this-var]
       (fn wrapper
         [& [a :as all]]
@@ -998,30 +1154,28 @@
         (original a)))
    ; this is often a compile time check anyway
    #'clojure.core/instance?
-    (fn clojure.core$instance? 
+    (fn clojure.core_SLASH_instance? 
       [original this-var]
       (fn wrapper
         [& [cls x :as all]]
         (check-nargs #{2} this-var all)
-        (when-not (class? cls)
-          (error 
-            "First argument to clojure.core/instance? must be a Class: "
-            (short-ds cls)))
+        (error-if-not (class? cls)
+          "First argument to clojure.core/instance? must be a Class: "
+          (short-ds cls))
         (apply original all)))
 ; apply uses seq, results in infinite cycles
    #'clojure.core/seq
-    (fn clojure.core$seq
+    (fn clojure.core_SLASH_seq
       [original this-var]
       (fn wrapper
         [& [coll :as all]]
         (check-nargs #{1} this-var all)
-        (when-not (seq-succeeds? coll)
-          (error 
-            "First argument to clojure.core/seq must be seqable: "
-            (short-ds coll)))
+        (error-if-not (seq-succeeds? coll)
+          "First argument to clojure.core/seq must be seqable: "
+          (short-ds coll))
         (original coll)))
    #'clojure.core/symbol
-    (fn clojure.core$symbol
+    (fn clojure.core_SLASH_symbol
       [original this-var]
       (fn wrapper
         [& [:as all]]
@@ -1042,95 +1196,94 @@
                        (short-ds s2)))))
         (apply original all)))
    #'clojure.core/cast
-    (fn clojure.core$cast
+    (fn clojure.core_SLASH_cast
       [original this-var]
       (fn wrapper
         [& [c i :as all]]
         (check-nargs #{2} this-var all)
-        (when-not (class? c)
-          (error "First argument to clojure.core/cast must be a class: "
-                 (short-ds c)))
+        (error-if-not (class? c)
+          "First argument to clojure.core/cast must be a class: "
+          (short-ds c))
         (original c i)))
    #'clojure.core/to-array
-    (fn clojure.core$to-array
+    (fn clojure.core_SLASH_to-array
       [original this-var]
       (fn wrapper
         [& [coll :as all]]
         (check-nargs #{1} this-var all)
-        (when-not (to-array-succeeds? coll)
-          (error "First argument to clojure.core/to-array must be a collection: "
-                 (short-ds coll)))
-        (original coll)))
+        (error-if-not (to-array-succeeds? coll)
+          "First argument to clojure.core/to-array must be a collection: "
+          (short-ds coll))
+        (apply original all)))
    #'clojure.core/vec
-    (fn clojure.core$vec
+    (fn clojure.core_SLASH_vec
       [original this-var]
       (fn wrapper
         [& [coll :as all]]
         (check-nargs #{1} this-var all)
-        (when-not (or (instance? java.util.Collection coll)
-                      (to-array-succeeds? coll))
-          (error "First argument to clojure.core/vec must be a collection or array: "
-                 (short-ds coll)))
+        (error-if-not (or (instance? java.util.Collection coll) (to-array-succeeds? coll))
+          "First argument to clojure.core/vec must be a collection or array: "
+          (short-ds coll))
         (original coll)))
    #'clojure.core/hash-map
-    (fn clojure.core$hash-map
+    (fn clojure.core_SLASH_hash-map
       [original this-var]
       (fn wrapper
         [& [:as all]]
-        (when-not (even? (count all))
-          (error "Must pass even number of arguments to clojure.core/hash-map, actual: "
-                 (count all)))
+        (error-if-not (even? (count all))
+          "Must pass even number of arguments to clojure.core/hash-map, actual: "
+          (count all))
         (apply original all)))
    #'clojure.core/sorted-map
-    (fn clojure.core$sorted-map
+    (fn clojure.core_SLASH_sorted-map
       [original this-var]
       (fn wrapper
         [& [:as all]]
-        (when-not (even? (count all))
-          (error "Must pass even number of arguments to clojure.core/sorted-map, actual: "
-                 (count all)))
+        (error-if-not (even? (count all))
+          "Must pass even number of arguments to clojure.core/sorted-map, actual: "
+          (count all))
         (apply original all)))
    #'clojure.core/sorted-map-by
-    (fn clojure.core$sorted-map-by
+    (fn clojure.core_SLASH_sorted-map-by
       [original this-var]
       (fn wrapper
         [& [c & args :as all]]
         (check-nargs #(<= 1 %) this-var all)
-        (when-not (instance? java.util.Comparator c)
-          (error "First argument to clojure.core/sorted-map-by must be a comparator, actual: "
-                 (count args)))
-        (when-not (even? (count args))
-          (error "Must pass even number of variable arguments to clojure.core/sorted-map-by, actual: "
-                 (count args)))
+        (error-if-not (instance? java.util.Comparator c)
+          "First argument to clojure.core/sorted-map-by must be a comparator, actual: "
+          (count args))
+        (error-if-not (even? (count args))
+          "Must pass even number of variable arguments to clojure.core/sorted-map-by, actual: "
+          (count args))
         (apply original all)))
    #'clojure.core/sorted-set-by
-    (fn clojure.core$sorted-set-by
+    (fn clojure.core_SLASH_sorted-set-by
       [original this-var]
       (fn wrapper
         [& [c & args :as all]]
         (check-nargs #(<= 1 %) this-var all)
-        (when-not (instance? java.util.Comparator c)
-          (error "First argument to clojure.core/sorted-set-by must be a comparator, actual: "
-                 (count args)))
+        (error-if-not (instance? java.util.Comparator c)
+          "First argument to clojure.core/sorted-set-by must be a comparator, actual: "
+          (count args))
         (apply original all)))
    #'clojure.core/find
-    (fn clojure.core$find
+    (fn clojure.core_SLASH_find
       [original the-var]
       (fn wrapper 
         [& [m k :as all]]
         (check-nargs #{2} the-var all)
-        (when-not ((some-fn #(instance? java.util.Map %) nil?) m)
-          (error "First argument to clojure.core/find must be a map or nil: " (short-ds m)))
+        (error-if-not ((some-fn #(instance? java.util.Map %) nil?) m)
+          "First argument to clojure.core/find must be a map or nil: " (short-ds m))
         (original m k)))
    #'clojure.core/nil?
-    (fn clojure.core$nil?
+    (fn clojure.core_SLASH_nil?
       [original this-var]
       (fn wrapper
         [& [a :as all]]
         (check-nargs #{1} this-var all)
         (original a)))
    #'clojure.core/disj
-    (fn clojure.core$disj
+    (fn clojure.core_SLASH_disj
       [original the-var]
       (fn wrapper 
         [& [s & args :as all]]
@@ -1144,7 +1297,7 @@
                    (short-ds s))))
         (apply original all)))
    #'clojure.core/conj
-    (fn clojure.core$conj
+    (fn clojure.core_SLASH_conj
       [original the-var]
       (fn wrapper 
         [& [t a :as all]]
@@ -1167,35 +1320,35 @@
                    (short-ds a)))
         (apply original all)))
    #'clojure.core/next
-    (fn clojure.core$next
+    (fn clojure.core_SLASH_next
       [original the-var]
       (fn wrapper 
         [& [coll :as all]]
         (check-nargs #{1} the-var all)
-        (when-not (seq-succeeds? coll)
-          (error "First argument to clojure.core/next must be seqable: "
-                 (short-ds coll)))
+        (error-if-not (seq-succeeds? coll)
+          "First argument to clojure.core/next must be seqable: "
+          (short-ds coll))
         (original coll)))
    #'clojure.core/rest
-    (fn clojure.core$rest
+    (fn clojure.core_SLASH_rest
       [original the-var]
       (fn wrapper 
         [& [coll :as all]]
         (check-nargs #{1} the-var all)
-        (when-not (seq-succeeds? coll)
-          (error "First argument to clojure.core/rest must be seqable: "
-                 (short-ds coll)))
+        (error-if-not (seq-succeeds? coll)
+          "First argument to clojure.core/rest must be seqable: "
+          (short-ds coll))
         (original coll)))
   ; TODO some complicated invariants and error conditions with reduce
 ;   #'clojure.core/reduce
-;    (fn clojure.core$reduce
+;    (fn clojure.core_SLASH_reduce
 ;      [original the-var]
 ;      (fn wrapper
 ;        [& [:as all]]
 ;        (check-nargs #{2 3} the-var all)
 ;        (apply original all)))
    #'clojure.core/deref
-    (fn clojure.core$deref
+    (fn clojure.core_SLASH_deref
       [original the-var]
       (fn wrapper 
         [& [r :as all]]
@@ -1219,8 +1372,8 @@
   {#'clojure.core/unchecked-inc
     (fn [original the-var]
       (fn [& [x :as all]]
-        (when-not (#{1} (count all))
-          (error "Wrong number of arguments to clojure.core/unchecked-inc: " (count all)))
+        (error-if-not (#{1} (count all))
+          "Wrong number of arguments to clojure.core/unchecked-inc: " (count all))
         (let [gx (gensym 'x)]
           `(let [~gx ~x
                  res# ~(original gx)]
@@ -1237,14 +1390,14 @@
 
 (defn check-for-like-macro
   [vsym seq-exprs]
-  (when (zero? (count seq-exprs))
-    (error vsym " takes at least one binding form"))
-  (when-not (even? (count seq-exprs))
-    (error vsym "takes an even number of forms in binding vector, "
-           "given: " (count seq-exprs)))
-  (when (#{:let :while :when} (first seq-exprs))
-    (error vsym "takes at least one binding form before a " (first seq-exprs)
-           " modifier")))
+  (error-if (zero? (count seq-exprs))
+    vsym " takes at least one binding form")
+  (error-if-not (even? (count seq-exprs))
+    vsym "takes an even number of forms in binding vector, "
+    "given: " (count seq-exprs))
+  (error-if (#{:let :while :when} (first seq-exprs))
+    vsym "takes at least one binding form before a " (first seq-exprs)
+    " modifier"))
 
 (defn wrap-for-like-binding
   [vsym seq-exprs]
@@ -1264,9 +1417,9 @@
         :else 
           (let [rhs `(let [gs# ~i]
                        (tc-ignore
-                         (when-not (seq-succeeds? gs#)
-                           (error '~vsym " initial binding must be seqable: "
-                                  (class gs#))))
+                         (error-if-not (seq-succeeds? gs#)
+                           '~vsym " initial binding must be seqable: "
+                           (class gs#)))
                        gs#)]
             (recur ne (conj new-exprs b rhs))))
       new-exprs)))
@@ -1281,7 +1434,7 @@
 
 (def ^:private new-macro-mappings
   {#'clojure.core/lazy-seq
-    (fn clojure.core$lazy-seq
+    (fn clojure.core_SLASH_lazy-seq
       [original the-var]
       (fn wrapper 
         [&form &env & all]
@@ -1296,12 +1449,12 @@
                           "\n\n\t in:\n" '~&form))))
              s#))))
    #'clojure.core/let
-    (fn clojure.core$let
+    (fn clojure.core_SLASH_let
       [original the-var]
       (fn wrapper
         [&form &env & [bindings & body :as all]]
-        (when-not (<= 1 (count all))
-          (error "clojure.core/let takes at least 1 argument, given " (count all)))
+        (error-if-not (<= 1 (count all))
+          "clojure.core/let takes at least 1 argument, given " (count all))
         ;TODO check destructuring
         (apply original
           &form
@@ -1309,15 +1462,15 @@
           bindings
           body)))
    #'clojure.core/for
-    (fn clojure.core$for
+    (fn clojure.core_SLASH_for
       [original the-var]
       (fn wrapper 
         [&form &env & [seq-exprs body-expr :as all]]
-        (when-not (#{2} (count all))
-          (error "clojure.core/for takes 2 arguments, given " (count all)))
-        (when-not (vector? seq-exprs)
-          (error "clojure.core/for takes a vector as first argument, given: "
-                 (class seq-exprs)))
+        (error-if-not (#{2} (count all))
+          "clojure.core/for takes 2 arguments, given " (count all))
+        (error-if-not (vector? seq-exprs)
+          "clojure.core/for takes a vector as first argument, given: "
+          (class seq-exprs))
         (let [new-exprs (wrap-for-like-binding
                           'clojure.core/for
                           seq-exprs)]
