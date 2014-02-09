@@ -103,7 +103,7 @@ is transformed to be as understandable as possible.
 
 If you happen to get a stack trace not thrown
 by dynalint, you will notice calls to strange looking functions like 
-`dynalint.lint$clojure.core\_SLASH\_first$wrapper\_\_8482`. This should be interpretted as dynalint's
+`dynalint.lint$clojure.core_SLASH_first$wrapper__8482`. This should be interpretted as dynalint's
 wrapper for `clojure.core/first`, and for most purposes exactly the same as a stack entry calling
 `clojure.core/first`.
 
