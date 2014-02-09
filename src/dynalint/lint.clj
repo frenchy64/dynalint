@@ -995,6 +995,18 @@
         [& [a :as all]]
         (check-nargs #{1} this-var all)
         (original a)))
+   #'clojure.core/map
+    (fn clojure.core$map
+      [original this-var]
+      (fn wrapper
+        [& [f c1 :as all]]
+        (if-not (<= 1 (count all))
+          (error "clojure.core/map needs at least 2 args"))
+        (when-not (every? seq-succeeds? (rest all))
+          (error "clojure.core/map needs seqable arg"))
+        (when (and (and (not (ifn? f)) (nil? f)) (not (empty? c1)))
+          (error (str "First argument to clojure.core/map must be a fn " f c1)))
+        (apply original all)))
    #'clojure.core/vector?
     (fn clojure.core$vector?
       [original this-var]
@@ -1192,14 +1204,24 @@
           (error "First argument to clojure.core/rest must be seqable: "
                  (short-ds coll)))
         (original coll)))
-  ; TODO some complicated invariants and error conditions with reduce
-;   #'clojure.core/reduce
-;    (fn clojure.core$reduce
-;      [original the-var]
-;      (fn wrapper
-;        [& [:as all]]
-;        (check-nargs #{2 3} the-var all)
-;        (apply original all)))
+   #'clojure.core/reduce
+    (fn clojure.core$reduce
+      [original the-var]
+      (fn wrapper
+        [& [f arg1 arg2 :as all]]
+        (check-nargs #{2 3} the-var all)
+        (if (= 2 (count all))
+          (do
+            (when-not (seq-succeeds? arg1)
+              (error "clojure.core/reduce needs second arg to be seqable"))
+            (when (and (nil? f) (not (= (count arg1) 1)))
+              (error "clojure.core/reduce: when first arg is nil second arg should contains only one args")))
+          (do
+            (when-not (seq-succeeds? arg2)
+              (error "clojure.core/reduce needs third arg to be seqable"))
+            (when (and (nil? f) (not (empty? arg2)))
+              (error "clojure.core/reduce: when first arg is nil third arg couldn't be empty"))))
+        (apply original all)))
    #'clojure.core/deref
     (fn clojure.core$deref
       [original the-var]

@@ -257,14 +257,28 @@
         (sorted-set-by 1 1)))
   )
 
-;(deftest reduce-test
-;  (is (reduce nil [1]))
-;  (is (throws-dynalint-error?
-;        (reduce nil [])))
-;  (is (throws-dynalint-error?
-;        (reduce nil 1)))
-;  (is (throws-dynalint-error?
-;        (reduce nil 1 [1]))))
+(deftest map-test
+  (is (map + []))
+  (is (map nil []))
+  (is (throws-dynalint-error?
+        (map nil [1])))
+  (is (map nil [] [] []))
+  (is (throws-dynalint-error?
+        (map + 1)))
+  (is (throws-dynalint-error?
+        (map nil 1 [1]))))
+
+(deftest reduce-test
+  (is (throws-dynalint-error?
+        (reduce nil [])))
+  (is (reduce + []))
+  (is (reduce nil [1]))
+  (is (throws-dynalint-error?
+        (reduce nil [1 2])))
+  (is (throws-dynalint-error?
+        (reduce nil 1)))
+  (is (throws-dynalint-error?
+        (reduce nil 1 [1]))))
 
 (deftest let-destructure-test
   #_(is (throws-dynalint-error?
