@@ -262,7 +262,7 @@
              :post [(or (nil? %)
                         (instance? StackTraceElement %))]}
             (let [clstr (.getClassName ste)
-                  [nstr wrapper-of innermarker :as allcls]
+                  [nstr wrapper-of innermarker right-more :as allcls]
                   (->> (partition-by #{\$} clstr)
                        (map (partial apply str))
                        (remove #{"$"}))
@@ -287,15 +287,19 @@
                       ]
                   (if-not (var? v)
                     ste 
-                    (or 
-                      (ste-for-var v)
-                      ste))))))]
+                    (cond
+                      ; drop any inner calls inside a dynalint wrapper
+                      (seq right-more) nil
+                      :else (or (ste-for-var v)
+                                ste)))))))]
     (doto e
       (.setStackTrace
         (into-array 
           StackTraceElement
-          (let [es (->> 
-                     (map process-ste (.getStackTrace e))
+          (let [original-st (.getStackTrace e)
+                ;_ (prn "original-st" (map (comp :className bean) original-st))
+                es (->> original-st
+                     (map process-ste)
                      (remove nil?))]
             ((or process-entries identity) es)))))))
 
@@ -314,6 +318,48 @@
   "If set to true, skip all error checks installed by Dynalint.
   Defaults to false"
   (atom false))
+
+(defn ^:private reset-globals! [opts val]
+  (doseq [o opts]
+    (case o
+      :warn (reset! disable-warnings val)
+      :error (reset! disable-errors val)
+      :all (do (reset! disable-warnings val)
+               (reset! disable-errors val))
+      nil)))
+
+(defn configure-linting!
+  "Globally configure linting options, applied from left-to-right.
+  Only has effect after loading the linter with (lint).
+  
+  Options
+  - :enable    enable linting for the given options
+  - :disable   enable linting for the given options
+               - valid options: a collection or keyword consisting of
+                 :warn   configure warnings
+                 :error  configure errors
+                 :all    configure all linting
+  
+  eg. ;Enable all linting
+      (configure-linting! :enable :all)
+      
+      ;Disable all linting
+      (configure-linting! :disable :all)
+
+      ; Just enable errors and warnings
+      (configure-linting! :disable :all, :enable [:error :warn])"
+  [& opt]
+  ;TODO complain on bad arguments
+  (when (even? (count opt))
+    (doseq [[k v] (partition 2 opt)]
+      (let [v (if (keyword? v)
+                [v]
+                v)]
+        (when (coll? v)
+          (case k
+            :enable (reset-globals! v false)
+            :disable (reset-globals! v true)
+            nil))))))
 
 (defn errors-disabled? []
   (or 
@@ -403,35 +449,39 @@
         (.isArray c))))
       
 (defn ^:private check-kw-params [the-var opts validators]
-  (let [vsym (var->symbol the-var)]
-    (when-not (even? (count opts))
-      (error "Uneven number of keyword parameters passed to " vsym))
-    (let [ks (take-nth 2 opts)
-          bad-ks (remove (set (keys validators)) ks)]
-      (when (seq bad-ks)
-        (warn "Undocumented keyword arguments to " vsym ": "
-              (apply str (mapv short-ds bad-ks)))))
-    (let [kopts (apply hash-map opts)
-          new-kvals
-            (loop [[& [[k vfn] & vnext :as vall]] validators
-                   new-kvals {}]
-              (if vall
-                (recur vnext
-                       (conj new-kvals 
-                             [k (vfn (get kopts k) (contains? kopts k) kopts)]))
-                new-kvals))
-          new-flat
-            (loop [[& [[k v] :as flatopts]] (partition 2 opts)
-                   new-flat []]
-              (if flatopts
-                (recur (next flatopts)
-                       (conj new-flat
-                             k (if (contains? new-kvals k)
-                                 (get new-kvals k)
-                                 v)))
-                new-flat))
-          ]
-      new-flat)))
+  (if (and (errors-disabled?)
+           (warnings-disabled?))
+    opts
+    (with-disabled-linting
+      (let [vsym (var->symbol the-var)]
+        (when-not (even? (count opts))
+          (error "Uneven number of keyword parameters passed to " vsym))
+        (let [ks (take-nth 2 opts)
+              bad-ks (remove (set (keys validators)) ks)]
+          (when (seq bad-ks)
+            (warn "Undocumented keyword arguments to " vsym ": "
+                  (apply str (mapv short-ds bad-ks)))))
+        (let [kopts (apply hash-map opts)
+              new-kvals
+              (loop [[& [[k vfn] & vnext :as vall]] validators
+                     new-kvals {}]
+                (if vall
+                  (recur vnext
+                         (conj new-kvals 
+                               [k (vfn (get kopts k) (contains? kopts k) kopts)]))
+                  new-kvals))
+              new-flat
+              (loop [[& [[k v] :as flatopts]] (partition 2 opts)
+                     new-flat []]
+                (if flatopts
+                  (recur (next flatopts)
+                         (conj new-flat
+                               k (if (contains? new-kvals k)
+                                   (get new-kvals k)
+                                   v)))
+                  new-flat))
+              ]
+          new-flat)))))
 
 ; [Var -> [Any Any Map -> Any]]
 (defn check-iref-meta-kw
@@ -1505,11 +1555,19 @@
 
 ;(t/ann lint [Any -> Any])
 (defn lint 
-  "Load the linter"
-  []
+  "Load the linter. Takes the same options as configure-linting!.
+  
+  Prefer calling configure-linting! to further configure options
+  after initially loading the linter. Dynalint will attempt to reload
+  itself cleanly on multiple calls to `lint`, but it may conflict
+  with other monkey-patching libraries. A warning will be thrown if
+  reloading fails."
+  [& opts]
   (lint-macros)
   (lint-inline-vars)
   (lint-var-mappings)
+  (when opts
+    (apply configure-linting! opts))
   :ok)
     
 (comment

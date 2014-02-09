@@ -38,6 +38,78 @@ If you want to use Dynalint at the REPL, call `dynalint.lint/lint`.
 If you want to check a var's inlining or a macro's expansion, relevant
 forms must be compiled *after* running the linter.
 
+## Example
+
+### Errors
+
+For one reason or another, many core Clojure functions have bad error messages.
+Here's one example.
+
+```
+user=> (first 1)
+IllegalArgumentException Don't know how to create ISeq from: java.lang.Long  clojure.lang.RT.seqFrom (RT.java:505)
+
+user=> (clojure.repl/pst)
+IllegalArgumentException Don't know how to create ISeq from: java.lang.Long
+  clojure.lang.RT.seqFrom (RT.java:505)
+  clojure.lang.RT.seq (RT.java:486)
+  clojure.lang.RT.first (RT.java:578)
+  clojure.core/first (core.clj:55)
+  user/eval52988 (NO_SOURCE_FILE:1)
+  clojure.lang.Compiler.eval (Compiler.java:6619)
+  clojure.lang.Compiler.eval (Compiler.java:6582)
+  clojure.core/eval (core.clj:2852)
+  clojure.main/repl/read-eval-print--6588/fn--6591 (main.clj:259)
+  clojure.main/repl/read-eval-print--6588 (main.clj:259)
+  clojure.main/repl/fn--6597 (main.clj:277)
+  clojure.main/repl (main.clj:277)
+```
+
+The error originates from passing bogus arguments to `first`, yet we get an error
+deep in `first`'s implementation. This is simply pragmatism as such error checking would
+incur a performance penalty, but sometimes we just want a better error above all else.
+
+After running `(dynalint.lint/lint)` we can achieve better errors.
+
+```clojure
+user=> (require '[dynalint.lint :as dyn])
+nil
+user=> (dyn/lint)
+:ok
+user=> (first 1)
+ExceptionInfo ERROR (Dynalint id 1): First argument to clojure.core/first must be seqable: 1 (instance of class java.lang.Long)  dynalint.lint/error (lint.clj:63)
+
+user=> (clojure.repl/pst)
+ExceptionInfo ERROR (Dynalint id 1): First argument to clojure.core/first must be seqable: 1 (instance of class java.lang.Long) {:dynalint.lint/dynalint true, :dynalint.lint/error true, :dynalint.lint/id 1}
+  dynalint.lint/error (lint.clj:63)
+  clojure.core/first (core.clj:49)
+  clojure.lang.AFunction$1.doInvoke (AFunction.java:29)
+  user/eval2098 (NO_SOURCE_FILE:1)
+  clojure.lang.Compiler.eval (Compiler.java:6619)
+  clojure.lang.Compiler.eval (Compiler.java:6582)
+  clojure.core/eval (core.clj:2852)
+  clojure.main/repl/read-eval-print--6588/fn--6591 (main.clj:259)
+  clojure.main/repl/read-eval-print--6588 (main.clj:259)
+  clojure.main/repl/fn--6597 (main.clj:277)
+  clojure.main/repl (main.clj:277)
+  clojure.tools.nrepl.middleware.interruptible-eval/evaluate/fn--660 (interruptible_eval.clj:56)
+```
+
+Dynalint tries to cover it's tracks in the stack trace. Notice it seems `dynalint.lint/error`
+is directly called by `clojure.core/first`. This is not really the case, but the stack trace
+is transformed to be as understandable as possible. 
+
+If you happen to get a stack trace not thrown
+by dynalint, you will notice calls to strange looking functions like 
+`dynalint.lint$clojure.core\_SLASH\_first$wrapper\_\_8482`. This should be interpretted as dynalint's
+wrapper for `clojure.core/first`, and for most purposes exactly the same as a stack entry calling
+`clojure.core/first`.
+
+### Configuring the linter
+
+Use `dynalint.lint/configure-linting!` to customise your linting experience. Note that
+`dynalint.lint/lint` also takes the same arguments, but should only usually be run once.
+
 ## Contributions
 
 Clojure CA required please.
