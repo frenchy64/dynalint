@@ -13,7 +13,6 @@
 - configure global options with `configure-linting!`
 - `dynalint.lint/lint` takes the same options as `configure-linting!`
 
-
 # 0.1.2 - 1 Feb 2014
 
 - `print-{warning,error}` now accept zero arguments to print the latest error/warning
