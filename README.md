@@ -16,6 +16,8 @@ preserve type hints.
 
 Designed for Clojure 1.5.1.
 
+See also: [lein-dynalint](https://github.com/frenchy64/lein-dynalint)
+
 ## Caveat: Prone to blowing the stack
 
 Dynalint's design is intrinsically prone to cyclic calling. If you get a StackOverflowException
