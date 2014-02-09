@@ -1,7 +1,6 @@
 # 0.1.3 - 9 Feb 2014
 
 - erase zipmap warnings (see CLJ-1302)
-- Add `disable-{errors,warnings}` to globally disable checks
 - Document `print-{warning,error}`
 - warnings now have a cooldown period to prevent dynalint from
   generating too many.
