@@ -9,8 +9,8 @@
             [clojure.set :as set]
             #_[clojure.core.typed :as t]))
 
-(when-not (= "1.5.1" (clojure-version))
-  (prn "WARNING: Dynalint is designed for Clojure 1.5.1, running " 
+(when-not (#{"1.5.1" "1.6.0"} (clojure-version))
+  (prn "WARNING: Dynalint is designed for Clojure 1.5.1 and 1.6.0, running "
        (clojure-version)))
 
 ;(t/tc-ignore
