@@ -105,6 +105,29 @@
    (when-let [e (@warning-history id)]
      (repl/pst e depth))))
 
+(def default-dump-lint-history-filename (atom "target/dynalint-output/output"))
+(def default-dump-lint-history-stacktrace-depth (atom 200))
+
+(defn dump-lint-history
+  ([]
+   (dump-lint-history @default-dump-lint-history-filename))
+  ([fname]
+   (dump-lint-history fname @default-dump-lint-history-stacktrace-depth))
+  ([fname depth]
+   (.mkdirs (.getParentFile (clojure.java.io/file fname)))
+   (when (.exists (clojure.java.io/file fname))
+     (clojure.java.io/delete-file fname))
+   (doseq [e (->> (concat (vals @error-history) (vals @warning-history))
+                  (sort-by (comp :dynalint.lint/id ex-data)))]
+     (spit fname
+           (with-out-str
+             (binding [*err* *out*]
+               (repl/pst e depth)
+               (prn)))
+           :append true))
+   (println "Output Dynalint results to" fname)
+   (flush)))
+
 (declare errors-disabled?)
 
 (def ^:dynamic *disable-warnings-in* false)
