@@ -1563,6 +1563,18 @@
   with other monkey-patching libraries. A warning will be thrown if
   reloading fails."
   [& opts]
+  (when opts
+    (let [start-message (get (apply hash-map opts) :start-message)]
+      (when start-message
+        (print "starting dynalint.lint/lint")
+        (if (= start-message :with-call-stack)
+          (try
+            (println " with call stack:")
+            (throw (Exception.))
+            (catch Exception e
+              (clojure.repl/pst e 300)))
+          (println))
+        (flush))))
   (lint-macros)
   (lint-inline-vars)
   (lint-var-mappings)
