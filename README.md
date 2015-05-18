@@ -2,19 +2,16 @@
 
 Lint your Clojure programs as they run.
 
-```
-[com.ambrosebs/dynalint "0.1.3"]
-```
-
 Dynalint is a simplistic linter that wraps operations in runtime checks.
-
 It is designed to never change behaviour, except for throwing different
 kinds of exceptions for bad input.
 
 Preserving performance is not a goal of Dynalint, but it will always
 preserve type hints.
 
-Designed for Clojure 1.5.1.
+Designed for Clojure 1.5.1, but has been modified so it can be tried
+with Clojure 1.6.0, too.
+
 
 ## Caveat: Prone to blowing the stack
 
@@ -22,9 +19,15 @@ Dynalint's design is intrinsically prone to cyclic calling. If you get a StackOv
 where a Dynalint namespace is obviously to blame, please stop using Dynalint for your
 project and file an issue.
 
+
 ## Usage
 
-Dynalint should only be used at dev time.
+Dynalint should only be used at dev time.  Add this to your project's
+dependencies:
+
+```clojure
+[com.ambrosebs/dynalint "0.1.3"]
+```
 
 If you want to use Dynalint at the REPL, call `dynalint.lint/lint`.
 
