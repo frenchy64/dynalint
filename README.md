@@ -56,8 +56,8 @@ example that can achieve that:
 ```
 
 If you move the `:injections` keyword and its value to a `:test`
-profile, it will be done near the beginning of `lein test`, but not
-`lein repl`.
+profile, Dyanlint will be enabled near the beginning of `lein test`,
+but not `lein repl`.
 
 Change `(dynalint.lint/lint)` to `(dynalint.lint/lint :start-message
 true)` if you want to enable a 1-line startup message to be printed to
