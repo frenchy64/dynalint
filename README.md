@@ -40,6 +40,30 @@ If you want to use Dynalint at the REPL, call `dynalint.lint/lint`.
 If you want to check a var's inlining or a macro's expansion, relevant
 forms must be compiled *after* running the linter.
 
+If you want Dynalint to be automatically enabled every time you run
+`lein test` or `lein repl`, here is a minimal `project.clj` file
+example that can achieve that:
+
+```clojure
+(defproject testdyna "0.1.0"
+  ;; ... other stuff here ...
+  :profiles {:dev {:dependencies [[com.ambrosebs/dynalint "0.1.3"]]
+                   :injections [(require 'dynalint.lint)
+                                (dynalint.lint/lint)]}}
+  ;; ... other stuff here ...
+  )
+```
+
+If you move the `:injections` keyword and its value to a `:test`
+profile, it will be done near the beginning of `lein test`, but not
+`lein repl`.
+
+Change `(dynalint.lint/lint)` to `(dynalint.lint/lint :start-message
+true)` if you want to enable a 1-line startup message to be printed to
+`*out*` when `dynalint.lint/lint` is called, to verify that it is
+being called in your project.
+
+
 ## Example
 
 ### Errors
