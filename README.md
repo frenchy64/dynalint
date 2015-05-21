@@ -56,13 +56,28 @@ example that can achieve that:
 ```
 
 If you move the `:injections` keyword and its value to a `:test`
-profile, Dyanlint will be enabled near the beginning of `lein test`,
+profile, Dynalint will be enabled near the beginning of `lein test`,
 but not `lein repl`.
 
 Change `(dynalint.lint/lint)` to `(dynalint.lint/lint :start-message
 true)` if you want to enable a 1-line startup message to be printed to
 `*out*` when `dynalint.lint/lint` is called, to verify that it is
 being called in your project.
+
+Other options that can be supplied to `lint`:
+
+* `:log-file "filename"` - Dynalint will create the directory
+  containing `filename`, delete the file, and then write to it the
+  full stack trace of every lint warning or error generated.
+* `:warning-interval 0.1` - Specify the minimum time in seconds that
+  Dynalint will issue consecutive warnings.  Specifying `0` or `nil`
+  will show all warnings.  The default is 1 second.  If this value is
+  neither `0` nor `nil`, the warnings printed by Dynalint can change
+  from one run to the next, due to variations in execution time.
+* `:enable` - The value can be a single keyword `:all`, `:error`, or
+  `:warn`, or a sequence of those keywords.  By default, both `:error`
+  and `:warn` are enabled.
+* `:disable` - The values are the same as for `:enable` above.
 
 
 ## Example
