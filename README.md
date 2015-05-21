@@ -79,6 +79,24 @@ Other options that can be supplied to `lint`:
   and `:warn` are enabled.
 * `:disable` - The values are the same as for `:enable` above.
 
+The following example enables the start message and logging to file
+`dynalint-log.txt`.  It disables the minimum time interval between
+warnings, thus showing all of them, no matter how close in time they
+occur.
+
+```clojure
+(defproject testdyna "0.1.0"
+  ;; ... other stuff here ...
+  :profiles {:dev {:dependencies [[com.ambrosebs/dynalint "0.1.4-SNAPSHOT"]]
+                   :injections [(require 'dynalint.lint)
+                                (dynalint.lint/lint
+				  :start-message true
+                                  :log-file "dynalint-log.txt"
+                                  :warning-interval nil)]}}
+  ;; ... other stuff here ...
+  )
+```
+
 
 ## Example
 
