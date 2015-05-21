@@ -22,8 +22,20 @@ project and file an issue.
 
 ## Usage
 
-Dynalint should only be used at dev time.  Add this to your project's
-dependencies:
+Dynalint should only be used at dev time.  You can start it manually
+in a REPL, or in a Leiningen project you may modify your `project.clj`
+file to start it automatically for you.
+
+No matter you you start Dynalint, it is enabled by calling its `lint`
+function.  `lint` adds dynamic checks to vars and their inlinings.
+
+If you want to check a var's inlining or a macro's expansion, relevant
+forms must be compiled *after* running the linter.
+
+
+### Starting Dynalint manually
+
+Add this to your project's dependencies:
 
 ```clojure
 [com.ambrosebs/dynalint "0.1.3"]
@@ -36,10 +48,8 @@ If you want to use Dynalint at the REPL, call `dynalint.lint/lint`.
 (dyn/lint)
 ```
 
-`lint` adds dynamic checks to vars and their inlinings.
 
-If you want to check a var's inlining or a macro's expansion, relevant
-forms must be compiled *after* running the linter.
+### Starting Dynalint automatically with Leiningen
 
 If you want Dynalint to be automatically enabled every time you run
 `lein test` or `lein repl`, here is a minimal `project.clj` file
@@ -58,6 +68,9 @@ example that can achieve that:
 If you move the `:injections` keyword and its value to a `:test`
 profile, Dynalint will be enabled near the beginning of `lein test`,
 but not `lein repl`.
+
+
+### Dynalint options
 
 Change `(dynalint.lint/lint)` to `(dynalint.lint/lint :start-message
 true)` if you want to enable a 1-line startup message to be printed to
