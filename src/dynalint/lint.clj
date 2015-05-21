@@ -6,6 +6,7 @@
   (:refer-clojure :exclude [nil?])
   (:require [clojure.repl :as repl]
             [clojure.string :as str]
+            [clojure.java.io :as io]
             [clojure.set :as set]
             #_[clojure.core.typed :as t]))
 
@@ -56,6 +57,35 @@
 
 (declare prettify-stack-trace drop-until-stack-entry)
 
+(defn ^:private mkdir-and-delete-log-file [fname]
+  (if-let [dir (.getParentFile (io/file fname))]
+    (.mkdirs dir))
+  (when (.exists (io/file fname))
+    (io/delete-file fname)))
+
+(def ^clojure.lang.Atom log-file
+  "If non-nil, this is a file to which will be written warnings and
+  errors, with their stack traces, as they occur."
+  (atom nil))
+
+(defn ^:private start-logging! [fname]
+  (mkdir-and-delete-log-file fname)
+  (reset! log-file (io/writer fname)))
+
+(defn ^:private log [e & depth]
+  (if-let [f @log-file]
+    (let [dep (if depth (first depth) 200)]
+      (binding [*err* f *out* f]
+        (repl/pst e dep)
+        (prn)
+        (flush)))))
+
+(defn ^:private end-logging! []
+  (let [f @log-file]
+    (. f flush)
+    (. f close))
+  (reset! log-file nil))
+
 (defn error [& args]
   (let [id (inc-id)
         msg (apply str "ERROR " (str "(Dynalint id " id "): ") args)
@@ -73,6 +103,7 @@
             (prettify-stack-trace 
               :process-entries (drop-until-stack-entry 'dynalint.lint/error)))]
     (add-error id e)
+    (log e)
     (throw e)))
 
 (defn print-error
@@ -105,26 +136,20 @@
    (when-let [e (@warning-history id)]
      (repl/pst e depth))))
 
-(def default-dump-lint-history-filename (atom "target/dynalint-output/output"))
-(def default-dump-lint-history-stacktrace-depth (atom 200))
+(def dump-lint-history-filename (atom "target/dynalint-output/output"))
+(def dump-lint-history-stacktrace-depth (atom 200))
 
 (defn dump-lint-history
   ([]
-   (dump-lint-history @default-dump-lint-history-filename))
+   (dump-lint-history @dump-lint-history-filename))
   ([fname]
-   (dump-lint-history fname @default-dump-lint-history-stacktrace-depth))
+   (dump-lint-history fname @dump-lint-history-stacktrace-depth))
   ([fname depth]
-   (.mkdirs (.getParentFile (clojure.java.io/file fname)))
-   (when (.exists (clojure.java.io/file fname))
-     (clojure.java.io/delete-file fname))
+   (start-logging! fname)
    (doseq [e (->> (concat (vals @error-history) (vals @warning-history))
                   (sort-by (comp :dynalint.lint/id ex-data)))]
-     (spit fname
-           (with-out-str
-             (binding [*err* *out*]
-               (repl/pst e depth)
-               (prn)))
-           :append true))
+     (log e depth))
+   (end-logging! fname)
    (println "Output Dynalint results to" fname)
    (flush)))
 
@@ -378,11 +403,11 @@
       (let [v (if (keyword? v)
                 [v]
                 v)]
-        (when (coll? v)
-          (case k
-            :enable (reset-globals! v false)
-            :disable (reset-globals! v true)
-            nil))))))
+        (case k
+          :enable (reset-globals! v false)
+          :disable (reset-globals! v true)
+          :log-file (start-logging! v)
+          nil)))))
 
 (defn errors-disabled? []
   (or 
@@ -429,6 +454,7 @@
               (prettify-stack-trace 
                 :process-entries (drop-until-stack-entry 'dynalint.lint/warn)))]
       (add-warning id e)
+      (log e)
       (println msg)
       (flush))))
 
