@@ -686,7 +686,7 @@
     (fn clojure.core_SLASH_methods
       [original this-var]
       (fn wrapper
-        [& [multifn dispatch-val-x dispatch-val-y :as all]]
+        [& [multifn :as all]]
         (check-nargs #{1} this-var all)
         (error-if-not ((some-fn #(instance? clojure.lang.MultiFn %)) multifn)
           "First argument to clojure.core/methods must be a multimethod: "
@@ -1083,7 +1083,7 @@
                   (short-ds km))))
         (apply original all)))
    #'clojure.set/subset?
-    (fn clojure.core_SLASH_subset?
+    (fn clojure.set_SLASH_subset?
       [original this-var]
       (fn wrapper
         [& [:as all]]
@@ -1106,7 +1106,7 @@
     (fn clojure.core_SLASH_meta
       [original this-var]
       (fn wrapper
-        [& [x m :as all]]
+        [& [x :as all]]
         (check-nargs #{1} this-var all)
         (apply original all)))
    #'clojure.core/with-meta
