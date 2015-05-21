@@ -90,7 +90,7 @@ occur.
   :profiles {:dev {:dependencies [[com.ambrosebs/dynalint "0.1.4-SNAPSHOT"]]
                    :injections [(require 'dynalint.lint)
                                 (dynalint.lint/lint
-				  :start-message true
+                                  :start-message true
                                   :log-file "dynalint-log.txt"
                                   :warning-interval nil)]}}
   ;; ... other stuff here ...
