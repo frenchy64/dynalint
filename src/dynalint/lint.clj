@@ -93,7 +93,7 @@
         (flush)))))
 
 (defn ^:private end-logging! []
-  (let [f @log-file]
+  (let [^java.io.Writer f @log-file]
     (. f flush)
     (. f close))
   (reset! log-file nil))
