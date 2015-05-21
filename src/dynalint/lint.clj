@@ -376,6 +376,23 @@
                (reset! disable-errors val))
       nil)))
 
+(def last-warning-nano-time (atom Long/MIN_VALUE))
+
+(def warning-interval
+  "Minimum number of seconds between warnings.  If nil or 0, all
+  warnings will be shown."
+  (atom 1))
+
+(defn should-throw-warning? []
+  (if-let [interval @warning-interval]
+    (let [curr (System/nanoTime)
+          next-warning-time (+' (*' 1e9 interval) @last-warning-nano-time)]
+      (if (<= next-warning-time curr)
+        (do (reset! last-warning-nano-time curr)
+            true)
+        false))
+    true))
+
 (defn configure-linting!
   "Globally configure linting options, applied from left-to-right.
   Only has effect after loading the linter with (lint).
@@ -407,6 +424,7 @@
           :enable (reset-globals! v false)
           :disable (reset-globals! v true)
           :log-file (start-logging! v)
+          :warning-interval (reset! warning-interval v)
           nil)))))
 
 (defn errors-disabled? []
@@ -420,20 +438,6 @@
     ; must be very careful calling c.c/deref here
     (.deref disable-warnings)
     *disable-warnings-in*))
-
-(def last-warning-nano-time (atom Long/MIN_VALUE))
-
-(def warning-interval
-  "Miniumum number of seconds between warnings."
-  (atom 1))
-
-(defn should-throw-warning? []
-  (let [curr (System/nanoTime)
-        next-warning-time (+' (*' 1e9 @warning-interval) @last-warning-nano-time)]
-    (if (< next-warning-time curr)
-      (do (reset! last-warning-nano-time curr)
-          true)
-      false)))
 
 ;used in macros
 ;(t/ann warn [Any * -> Any])
