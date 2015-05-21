@@ -1589,14 +1589,13 @@
   (when opts
     (let [start-message (get (apply hash-map opts) :start-message)]
       (when start-message
-        (print "starting dynalint.lint/lint")
         (if (= start-message :with-call-stack)
           (try
-            (println " with call stack:")
+            (println "starting dynalint.lint/lint with call stack:")
             (throw (Exception.))
             (catch Exception e
               (clojure.repl/pst e 300)))
-          (println))
+          (println "starting dynalint.lint/lint"))
         (flush))))
   (lint-macros)
   (lint-inline-vars)
