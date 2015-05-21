@@ -10,6 +10,18 @@
             [clojure.set :as set]
             #_[clojure.core.typed :as t]))
 
+(def dynalint-url "https://github.com/frenchy64/dynalint")
+
+(def ^:dynamic *dynalint-version*
+  {:major 0, :minor 1, :incremental 4, :qualifier "SNAPSHOT"})
+
+(defn dynalint-version []
+  (let [{:keys [major minor incremental qualifier]} *dynalint-version*]
+    (str major "." minor "." incremental
+         (if (and qualifier (not= qualifier ""))
+           (str "-" qualifier)
+           ""))))
+
 (when-not (#{"1.5.1" "1.6.0"} (clojure-version))
   (prn "WARNING: Dynalint is designed for Clojure 1.5.1 and 1.6.0, running "
        (clojure-version)))
@@ -1619,14 +1631,18 @@
   (when opts
     (let [start-message (get (apply hash-map opts) :start-message)]
       (when start-message
-        (if (= start-message :with-call-stack)
-          (try
-            (println "starting dynalint.lint/lint with call stack:")
-            (throw (Exception.))
-            (catch Exception e
-              (clojure.repl/pst e 300)))
-          (println "starting dynalint.lint/lint"))
-        (flush))))
+        (let [versions (format "Dynalint %s Clojure %s JVM %s"
+                               (dynalint-version)
+                               (clojure-version)
+                               (get (System/getProperties) "java.version"))]
+          (if (= start-message :with-call-stack)
+            (try
+              (println "starting" versions "with call stack:")
+              (throw (Exception.))
+              (catch Exception e
+                (clojure.repl/pst e 300)))
+            (println "starting" versions))
+          (flush)))))
   (lint-macros)
   (lint-inline-vars)
   (lint-var-mappings)
