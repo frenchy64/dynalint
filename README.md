@@ -26,11 +26,11 @@ Dynalint should only be used at dev time.  You can start it manually
 in a REPL, or in a Leiningen project you may modify your `project.clj`
 file to start it automatically for you.
 
-No matter you you start Dynalint, it is enabled by calling its `lint`
+No matter how you start Dynalint, it is enabled by calling its `lint`
 function.  `lint` adds dynamic checks to vars and their inlinings.
 
 If you want to check a var's inlining or a macro's expansion, relevant
-forms must be compiled *after* running the linter.
+forms must be compiled *after* calling `lint`.
 
 
 ### Starting Dynalint manually
