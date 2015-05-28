@@ -105,20 +105,6 @@
   (is (throws-dynalint-error?
         (nnext 'a))))
 
-(deftest pred-test
-  (is (throws-dynalint-error?
-        (seq?)))
-  (is (throws-dynalint-error?
-        (char?)))
-  (is (throws-dynalint-error?
-        (string?)))
-  (is (throws-dynalint-error?
-        (map?)))
-  (is (throws-dynalint-error?
-        (vector?)))
-  #_(is (throws-dynalint-error?
-        (apply nil? nil))))
-
 (deftest instance?-args-test
   (is (throws-dynalint-error?
         (instance? 'a 'a))))
