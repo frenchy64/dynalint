@@ -291,3 +291,89 @@
   ;; Third arg not a Throwable
   (is (throws-dynalint-error?
        (ex-info "non-Throwable 3rd arg" {:a 1} 5))))
+
+(deftest partition-test
+  ;; Test that calls with correct type of args return normally.
+  (is (= '((1 2) (3 4))
+         (partition 2 [1 2 3 4 5])))
+  (is (= '((1) (2) (3) (4) (5))
+         (partition 1 [1 2 3 4 5])))
+  (is (= '((1 2) (2 3) (3 4) (4 5))
+         (partition 2 1 [1 2 3 4 5])))
+  (is (= '((1 2) (2 3) (3 4) (4 5) (5 6))
+         (partition 2 1 [6] [1 2 3 4 5])))
+
+  ;; Non-positive or non-integer n values give dynalint error
+  (is (throws-dynalint-error?
+       (partition 0 [1 2 3 4 5])))
+  (is (throws-dynalint-error?
+       (partition -1 [1 2 3 4 5])))
+  (is (throws-dynalint-error?
+       (partition 1.5 [1 2 3 4 5])))
+  (is (throws-dynalint-error?
+       (partition 0 1 [1 2 3 4 5])))
+  (is (throws-dynalint-error?
+       (partition 1.5 1 [1 2 3 4 5])))
+  (is (throws-dynalint-error?
+       (partition 0 1 [6] [1 2 3 4 5])))
+  (is (throws-dynalint-error?
+       (partition 1.5 1 [6] [1 2 3 4 5])))
+
+  ;; Non-positive or non-integer step values give dynalint error
+  (is (throws-dynalint-error?
+       (partition 2 0 [1 2 3 4 5])))
+  (is (throws-dynalint-error?
+       (partition 2 -1 [1 2 3 4 5])))
+  (is (throws-dynalint-error?
+       (partition 2 1.5 [1 2 3 4 5])))
+  (is (throws-dynalint-error?
+       (partition 2 0 [6] [1 2 3 4 5])))
+  (is (throws-dynalint-error?
+       (partition 2 1.5 [6] [1 2 3 4 5])))
+
+  ;; pad argument not a seqable gives dynalint error
+  (is (throws-dynalint-error?
+       (partition 2 0 6 [1 2 3 4 5])))
+
+  ;; coll argument not a seqable gives dynalint error
+  (is (throws-dynalint-error?
+       (partition 2 1)))
+  (is (throws-dynalint-error?
+       (partition 2 2 1)))
+  (is (throws-dynalint-error?
+       (partition 2 0 [6] 1))))
+
+(deftest partition-all-test
+  ;; Test that calls with correct type of args return normally.
+  (is (= '((1 2) (3 4) (5))
+         (partition-all 2 [1 2 3 4 5])))
+  (is (= '((1) (2) (3) (4) (5))
+         (partition-all 1 [1 2 3 4 5])))
+  (is (= '((1 2) (2 3) (3 4) (4 5) (5))
+         (partition-all 2 1 [1 2 3 4 5])))
+
+  ;; Non-positive or non-integer n values give dynalint error
+  (is (throws-dynalint-error?
+       (partition-all 0 [1 2 3 4 5])))
+  (is (throws-dynalint-error?
+       (partition-all -1 [1 2 3 4 5])))
+  (is (throws-dynalint-error?
+       (partition-all 1.5 [1 2 3 4 5])))
+  (is (throws-dynalint-error?
+       (partition-all 0 1 [1 2 3 4 5])))
+  (is (throws-dynalint-error?
+       (partition-all 1.5 1 [1 2 3 4 5])))
+
+  ;; Non-positive or non-integer step values give dynalint error
+  (is (throws-dynalint-error?
+       (partition-all 2 0 [1 2 3 4 5])))
+  (is (throws-dynalint-error?
+       (partition-all 2 -1 [1 2 3 4 5])))
+  (is (throws-dynalint-error?
+       (partition-all 2 1.5 [1 2 3 4 5])))
+
+  ;; coll argument not a seqable gives dynalint error
+  (is (throws-dynalint-error?
+       (partition-all 2 1)))
+  (is (throws-dynalint-error?
+       (partition-all 2 2 1))))

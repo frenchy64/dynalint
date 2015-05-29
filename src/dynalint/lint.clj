@@ -1408,6 +1408,74 @@
          (original msg m cause))
         ([a1 a2 a3 a4 & as]
          (check-nargs #{2 3} this-var (list* a1 a2 a3 a4 as)))))
+   #'clojure.core/partition
+    (fn clojure.core_SLASH_partition
+      [original this-var]
+      (fn wrapper
+        ([] (check-nargs #{2 3 4} this-var []))
+        ([a1] (check-nargs #{2 3 4} this-var [a1]))
+        ([n coll]
+         (error-if-not (and (integer? n) (pos? n))
+           "First argument to clojure.core/partition must be positive integer: "
+           (short-ds n))
+         (error-if-not (seq-succeeds? coll)
+           "Last argument to clojure.core/partition must be seqable: "
+           (short-ds coll))
+         (original n coll))
+        ([n step coll]
+         (error-if-not (and (integer? n) (pos? n))
+           "First argument to clojure.core/partition must be positive integer: "
+           (short-ds n))
+         (error-if-not (and (integer? step) (pos? step))
+           "step argument to clojure.core/partition must be positive integer: "
+           (short-ds step))
+         (error-if-not (seq-succeeds? coll)
+           "Last argument to clojure.core/partition must be seqable: "
+           (short-ds coll))
+         (original n step coll))
+        ([n step pad coll]
+         (error-if-not (and (integer? n) (pos? n))
+           "First argument to clojure.core/partition must be positive integer: "
+           (short-ds n))
+         (error-if-not (and (integer? step) (pos? step))
+           "step argument to clojure.core/partition must be positive integer: "
+           (short-ds step))
+         (error-if-not (seq-succeeds? pad)
+           "pad argument to clojure.core/partition must be seqable: "
+           (short-ds coll))
+         (error-if-not (seq-succeeds? coll)
+           "Last argument to clojure.core/partition must be seqable: "
+           (short-ds coll))
+         (original n step pad coll))
+        ([a1 a2 a3 a4 a5 & as]
+         (check-nargs #{2 3 4} this-var (list* a1 a2 a3 a4 a5 as)))))
+   #'clojure.core/partition-all
+    (fn clojure.core_SLASH_partition-all
+      [original this-var]
+      (fn wrapper
+        ([] (check-nargs #{2 3} this-var []))
+        ([a1] (check-nargs #{2 3} this-var [a1]))
+        ([n coll]
+         (error-if-not (and (integer? n) (pos? n))
+           "First argument to clojure.core/partition-all must be positive integer: "
+           (short-ds n))
+         (error-if-not (seq-succeeds? coll)
+           "Last argument to clojure.core/partition-all must be seqable: "
+           (short-ds coll))
+         (original n coll))
+        ([n step coll]
+         (error-if-not (and (integer? n) (pos? n))
+           "First argument to clojure.core/partition-all must be positive integer: "
+           (short-ds n))
+         (error-if-not (and (integer? step) (pos? step))
+           "step argument to clojure.core/partition-all must be positive integer: "
+           (short-ds step))
+         (error-if-not (seq-succeeds? coll)
+           "Last argument to clojure.core/partition-all must be seqable: "
+           (short-ds coll))
+         (original n step coll))
+        ([a1 a2 a3 a4 & as]
+         (check-nargs #{2 3} this-var (list* a1 a2 a3 a4 as)))))
    })
 
 ;(t/ann new-var-inlines (t/Map Var [[Any * -> Any] -> [Any * -> Any]]))
