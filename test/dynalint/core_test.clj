@@ -273,3 +273,21 @@
   (is
     (zipmap (keys {1 2})
             (vals {1 2}))))
+
+(deftest ex-info-test
+  ;; Test that calls with correct type of args return normally.
+  (is (= true (instance? Exception
+                         (ex-info "msg" {:a 1}))))
+  (is (= true (instance? Exception
+                         (ex-info "msg" {:a 1} (Throwable.)))))
+  ;; First arg not a string
+  (is (throws-dynalint-error?
+       (ex-info 1 {:a 1})))
+  (is (throws-dynalint-error?
+       (ex-info 1 {:a 1} (Throwable.))))
+  ;; Second arg not a map
+  (is (throws-dynalint-error?
+       (ex-info "nil data instead of map" nil (Throwable.))))
+  ;; Third arg not a Throwable
+  (is (throws-dynalint-error?
+       (ex-info "non-Throwable 3rd arg" {:a 1} 5))))

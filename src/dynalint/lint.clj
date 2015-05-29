@@ -1382,6 +1382,32 @@
          (original ref timeout-ms timeout-val))
         ([a1 a2 a3 a4 & as]
          (check-nargs #{1 3} this-var (list* a1 a2 a3 a4 as)))))
+   #'clojure.core/ex-info
+    (fn clojure.core_SLASH_ex-info
+      [original this-var]
+      (fn wrapper
+        ([] (check-nargs #{2 3} this-var []))
+        ([a1] (check-nargs #{2 3} this-var [a1]))
+        ([msg m]
+         (error-if-not (string? msg)
+           "clojure.core/ex-info first arg 'msg' must be a string: "
+           (short-ds msg))
+         ;; Clojure already throws an exception if (map? m) is false
+         ;; for this case.
+         (original msg m))
+        ([msg m cause]
+         (error-if-not (string? msg)
+           "clojure.core/ex-info first arg 'msg' must be a string: "
+           (short-ds msg))
+         (error-if-not (map? m)
+           "clojure.core/ex-info additional data must be a persistent map: "
+           (short-ds m))
+         (error-if-not (instance? Throwable cause)
+           "clojure.core/ex-info third arg 'cause' must be a Throwable: "
+           (short-ds cause))
+         (original msg m cause))
+        ([a1 a2 a3 a4 & as]
+         (check-nargs #{2 3} this-var (list* a1 a2 a3 a4 as)))))
    })
 
 ;(t/ann new-var-inlines (t/Map Var [[Any * -> Any] -> [Any * -> Any]]))
