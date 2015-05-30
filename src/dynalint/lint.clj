@@ -622,6 +622,9 @@
        ([a1# a2# a3# a4# & as#]
         (check-nargs #{3} ~this-var (list* a1# a2# a3# a4# as#))))))
 
+(def vector-of-allowed-first-args
+  #{:int :long :float :double :byte :short :char :boolean})
+
 ;(t/ann new-var-mappings (t/Map Var [[Any * -> Any] (Var Nothing Any) -> [Any * -> Any]]))
 (def ^:private new-var-mappings
   {#'clojure.core/keys
@@ -1476,6 +1479,17 @@
          (original n step coll))
         ([a1 a2 a3 a4 & as]
          (check-nargs #{2 3} this-var (list* a1 a2 a3 a4 as)))))
+   #'clojure.core/vector-of
+    (fn clojure.core_SLASH_vector-of
+      [original this-var]
+      (fn wrapper
+        ([] (check-nargs #(<= 1 %) this-var []))
+        ([t & xs]
+         (error-if-not (vector-of-allowed-first-args t)
+           "First argument to clojure.core/vector-of must be one of ["
+           (str/join " " (sort vector-of-allowed-first-args)) "] not: "
+           (short-ds t))
+         (apply original t xs))))
    })
 
 ;(t/ann new-var-inlines (t/Map Var [[Any * -> Any] -> [Any * -> Any]]))

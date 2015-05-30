@@ -377,3 +377,26 @@
        (partition-all 2 1)))
   (is (throws-dynalint-error?
        (partition-all 2 2 1))))
+
+(deftest vector-of-test
+  ;; Test that calls with correct type of args return normally.
+  (is (= [1 2 3]
+         (vector-of :byte 1 2 3)))
+  (is (= [1 2 3]
+         (vector-of :short 1 2 3)))
+  (is (= [1 2 3]
+         (vector-of :int 1 2 3)))
+  (is (= [1 2 3]
+         (vector-of :long 1 2 3)))
+  (is (= [(float 1.0) (float 2.0) (float 3.0)]
+         (vector-of :float 1 2 3)))
+  (is (= [1.0 2.0 3.0]
+         (vector-of :double 1 2 3)))
+  (is (= [false true]
+         (vector-of :boolean false true)))
+  (is (= [\a \b \c]
+         (vector-of :char \a \b \c)))
+
+  ;; unrecognized first argument gives dynalint error
+  (is (throws-dynalint-error?
+       (vector-of :integer 1 2 3))))
