@@ -2,6 +2,7 @@
   (:use clojure.test)
   (:refer-clojure :exclude [nil?])
   (:require [clojure.set :as set]
+            [clojure.java.io :as io]
             [dynalint.lint :as dyn :refer :all]))
 
 ; TODO each dynalint error should have a corresponding test for the
@@ -400,3 +401,11 @@
   ;; unrecognized first argument gives dynalint error
   (is (throws-dynalint-error?
        (vector-of :integer 1 2 3))))
+
+(deftest io-reader-test
+  ;; Test that calls with correct type of args return normally.
+  (is (= true (instance? java.io.BufferedReader
+                         (io/reader "README.md"))))
+  ;; nil argument gives dynalint error
+  (is (throws-dynalint-error?
+       (io/reader nil))))

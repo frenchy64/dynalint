@@ -1490,6 +1490,15 @@
            (str/join " " (sort vector-of-allowed-first-args)) "] not: "
            (short-ds t))
          (apply original t xs))))
+   #'clojure.java.io/reader
+    (fn clojure.java.io_SLASH_reader
+      [original this-var]
+      (fn wrapper
+        ([] (check-nargs #(<= 1 %) this-var []))
+        ([x & opts]
+         (error-if (nil? x)
+           "First argument to clojure.java.io/reader must not be nil")
+         (apply original x opts))))
    })
 
 ;(t/ann new-var-inlines (t/Map Var [[Any * -> Any] -> [Any * -> Any]]))
