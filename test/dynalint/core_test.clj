@@ -409,3 +409,25 @@
   ;; nil argument gives dynalint error
   (is (throws-dynalint-error?
        (io/reader nil))))
+
+(deftest keyword-test
+  ;; Test that calls with correct type of args return normally.
+  (is (= :foo (keyword :foo)))
+  (is (= :foo (keyword 'foo)))
+  (is (= :foo (keyword "foo")))
+  (is (= :foo/bar (keyword "foo" "bar")))
+
+  ;; Bad type for one arg arity
+  (is (throws-dynalint-error?
+       (keyword 5)))
+  (is (throws-dynalint-error?
+       (keyword [])))
+  (is (throws-dynalint-error?
+       (keyword nil)))
+
+  ;; Bad type for two arg arity
+  (is (throws-dynalint-error?
+       (keyword 5 nil)))
+  (is (throws-dynalint-error?
+       (keyword :foo :bar)))
+  )

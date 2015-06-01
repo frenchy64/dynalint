@@ -1499,6 +1499,26 @@
          (error-if (nil? x)
            "First argument to clojure.java.io/reader must not be nil")
          (apply original x opts))))
+   #'clojure.core/keyword
+    (fn clojure.core_SLASH_keyword
+      [original this-var]
+      (fn wrapper
+        ([] (check-nargs #{1 2} this-var []))
+        ([name]
+         (error-if-not (or (keyword? name) (symbol? name) (string? name))
+           "For 1-argument version of clojure.core/keyword, argument must be a keyword, symbol, or string: "
+           (short-ds name))
+         (original name))
+        ([ns name]
+         (error-if-not (string? ns)
+           "For 2-argument version of clojure.core/keyword, first argument must be a string: "
+           (short-ds ns))
+         (error-if-not (string? name)
+           "For 2-argument version of clojure.core/keyword, second argument must be a string: "
+           (short-ds name))
+         (original ns name))
+        ([a1 a2 a3 & as]
+         (check-nargs #{1 2} this-var (list* a1 a2 a3 as)))))
    })
 
 ;(t/ann new-var-inlines (t/Map Var [[Any * -> Any] -> [Any * -> Any]]))
