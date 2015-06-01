@@ -2,21 +2,16 @@
 
 Lint your Clojure programs as they run.
 
-```
-[com.ambrosebs/dynalint "0.1.3"]
-```
-
 Dynalint is a simplistic linter that wraps operations in runtime checks.
-
 It is designed to never change behaviour, except for throwing different
 kinds of exceptions for bad input.
 
 Preserving performance is not a goal of Dynalint, but it will always
 preserve type hints.
 
-Designed for Clojure 1.5.1.
+Designed for Clojure 1.5.1, but has been modified so it can be tried
+with Clojure 1.6.0, too.
 
-See also: [lein-dynalint](https://github.com/frenchy64/lein-dynalint)
 
 ## Caveat: Prone to blowing the stack
 
@@ -24,9 +19,27 @@ Dynalint's design is intrinsically prone to cyclic calling. If you get a StackOv
 where a Dynalint namespace is obviously to blame, please stop using Dynalint for your
 project and file an issue.
 
+
 ## Usage
 
-Dynalint should only be used at dev time.
+Dynalint should only be used at dev time.  You can start it manually
+in a REPL, or in a Leiningen project you may modify your `project.clj`
+file to start it automatically for you.
+
+No matter how you start Dynalint, it is enabled by calling its `lint`
+function.  `lint` adds dynamic checks to vars and their inlinings.
+
+If you want to check a var's inlining or a macro's expansion, relevant
+forms must be compiled *after* calling `lint`.
+
+
+### Starting Dynalint manually
+
+Add this to your project's dependencies:
+
+```clojure
+[com.ambrosebs/dynalint "0.1.3"]
+```
 
 If you want to use Dynalint at the REPL, call `dynalint.lint/lint`.
 
@@ -35,10 +48,68 @@ If you want to use Dynalint at the REPL, call `dynalint.lint/lint`.
 (dyn/lint)
 ```
 
-`lint` adds dynamic checks to vars and their inlinings.
 
-If you want to check a var's inlining or a macro's expansion, relevant
-forms must be compiled *after* running the linter.
+### Starting Dynalint automatically with Leiningen
+
+If you want Dynalint to be automatically enabled every time you run
+`lein test` or `lein repl`, here is a minimal `project.clj` file
+example that can achieve that:
+
+```clojure
+(defproject testdyna "0.1.0"
+  ;; ... other stuff here ...
+  :profiles {:dev {:dependencies [[com.ambrosebs/dynalint "0.1.3"]]
+                   :injections [(require 'dynalint.lint)
+                                (dynalint.lint/lint)]}}
+  ;; ... other stuff here ...
+  )
+```
+
+If you move the `:injections` keyword and its value to a `:test`
+profile, Dynalint will be enabled near the beginning of `lein test`,
+but not `lein repl`.
+
+
+### Dynalint options
+
+Change `(dynalint.lint/lint)` to `(dynalint.lint/lint :start-message
+true)` if you want to enable a 1-line startup message to be printed to
+`*out*` when `dynalint.lint/lint` is called, to verify that it is
+being called in your project.
+
+Other options that can be supplied to `lint`:
+
+* `:log-file "filename"` - Dynalint will create the directory
+  containing `filename`, delete the file, and then write to it the
+  full stack trace of every lint warning or error generated.
+* `:warning-interval 0.1` - Specify the minimum time in seconds that
+  Dynalint will issue consecutive warnings.  Specifying `0` or `nil`
+  will show all warnings.  The default is 1 second.  If this value is
+  neither `0` nor `nil`, the warnings printed by Dynalint can change
+  from one run to the next, due to variations in execution time.
+* `:enable` - The value can be a single keyword `:all`, `:error`, or
+  `:warn`, or a sequence of those keywords.  By default, both `:error`
+  and `:warn` are enabled.
+* `:disable` - The values are the same as for `:enable` above.
+
+The following example enables the start message and logging to file
+`dynalint-log.txt`.  It disables the minimum time interval between
+warnings, thus showing all of them, no matter how close in time they
+occur.
+
+```clojure
+(defproject testdyna "0.1.0"
+  ;; ... other stuff here ...
+  :profiles {:dev {:dependencies [[com.ambrosebs/dynalint "0.1.4-SNAPSHOT"]]
+                   :injections [(require 'dynalint.lint)
+                                (dynalint.lint/lint
+                                  :start-message true
+                                  :log-file "dynalint-log.txt"
+                                  :warning-interval nil)]}}
+  ;; ... other stuff here ...
+  )
+```
+
 
 ## Example
 

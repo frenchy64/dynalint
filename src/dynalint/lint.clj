@@ -6,11 +6,24 @@
   (:refer-clojure :exclude [nil?])
   (:require [clojure.repl :as repl]
             [clojure.string :as str]
+            [clojure.java.io :as io]
             [clojure.set :as set]
             #_[clojure.core.typed :as t]))
 
-(when-not (= "1.5.1" (clojure-version))
-  (prn "WARNING: Dynalint is designed for Clojure 1.5.1, running " 
+(def dynalint-url "https://github.com/frenchy64/dynalint")
+
+(def ^:dynamic *dynalint-version*
+  {:major 0, :minor 1, :incremental 4, :qualifier "SNAPSHOT"})
+
+(defn dynalint-version []
+  (let [{:keys [major minor incremental qualifier]} *dynalint-version*]
+    (str major "." minor "." incremental
+         (if (and qualifier (not= qualifier ""))
+           (str "-" qualifier)
+           ""))))
+
+(when-not (#{"1.5.1" "1.6.0"} (clojure-version))
+  (prn "WARNING: Dynalint is designed for Clojure 1.5.1 and 1.6.0, running "
        (clojure-version)))
 
 ;(t/tc-ignore
@@ -56,6 +69,35 @@
 
 (declare prettify-stack-trace drop-until-stack-entry)
 
+(defn ^:private mkdir-and-delete-log-file [fname]
+  (if-let [dir (.getParentFile (io/file fname))]
+    (.mkdirs dir))
+  (when (.exists (io/file fname))
+    (io/delete-file fname)))
+
+(def ^clojure.lang.Atom log-file
+  "If non-nil, this is a file to which will be written warnings and
+  errors, with their stack traces, as they occur."
+  (atom nil))
+
+(defn ^:private start-logging! [fname]
+  (mkdir-and-delete-log-file fname)
+  (reset! log-file (io/writer fname)))
+
+(defn ^:private log [e & depth]
+  (if-let [f @log-file]
+    (let [dep (if depth (first depth) 200)]
+      (binding [*err* f *out* f]
+        (repl/pst e dep)
+        (prn)
+        (flush)))))
+
+(defn ^:private end-logging! []
+  (let [^java.io.Writer f @log-file]
+    (. f flush)
+    (. f close))
+  (reset! log-file nil))
+
 (defn error [& args]
   (let [id (inc-id)
         msg (apply str "ERROR " (str "(Dynalint id " id "): ") args)
@@ -73,6 +115,7 @@
             (prettify-stack-trace 
               :process-entries (drop-until-stack-entry 'dynalint.lint/error)))]
     (add-error id e)
+    (log e)
     (throw e)))
 
 (defn print-error
@@ -104,6 +147,23 @@
   ([id depth]
    (when-let [e (@warning-history id)]
      (repl/pst e depth))))
+
+(def dump-lint-history-filename (atom "target/dynalint-output/output"))
+(def dump-lint-history-stacktrace-depth (atom 200))
+
+(defn dump-lint-history
+  ([]
+   (dump-lint-history @dump-lint-history-filename))
+  ([fname]
+   (dump-lint-history fname @dump-lint-history-stacktrace-depth))
+  ([fname depth]
+   (start-logging! fname)
+   (doseq [e (->> (concat (vals @error-history) (vals @warning-history))
+                  (sort-by (comp :dynalint.lint/id ex-data)))]
+     (log e depth))
+   (end-logging! fname)
+   (println "Output Dynalint results to" fname)
+   (flush)))
 
 (declare errors-disabled?)
 
@@ -328,6 +388,23 @@
                (reset! disable-errors val))
       nil)))
 
+(def last-warning-nano-time (atom Long/MIN_VALUE))
+
+(def warning-interval
+  "Minimum number of seconds between warnings.  If nil or 0, all
+  warnings will be shown."
+  (atom 1))
+
+(defn should-throw-warning? []
+  (if-let [interval @warning-interval]
+    (let [curr (System/nanoTime)
+          next-warning-time (+' (*' 1e9 interval) @last-warning-nano-time)]
+      (if (<= next-warning-time curr)
+        (do (reset! last-warning-nano-time curr)
+            true)
+        false))
+    true))
+
 (defn configure-linting!
   "Globally configure linting options, applied from left-to-right.
   Only has effect after loading the linter with (lint).
@@ -355,11 +432,12 @@
       (let [v (if (keyword? v)
                 [v]
                 v)]
-        (when (coll? v)
-          (case k
-            :enable (reset-globals! v false)
-            :disable (reset-globals! v true)
-            nil))))))
+        (case k
+          :enable (reset-globals! v false)
+          :disable (reset-globals! v true)
+          :log-file (start-logging! v)
+          :warning-interval (reset! warning-interval v)
+          nil)))))
 
 (defn errors-disabled? []
   (or 
@@ -372,20 +450,6 @@
     ; must be very careful calling c.c/deref here
     (.deref disable-warnings)
     *disable-warnings-in*))
-
-(def last-warning-nano-time (atom Long/MIN_VALUE))
-
-(def warning-interval
-  "Miniumum number of seconds between warnings."
-  (atom 1))
-
-(defn should-throw-warning? []
-  (let [curr (System/nanoTime)
-        next-warning-time (+' (*' 1e9 @warning-interval) @last-warning-nano-time)]
-    (if (< next-warning-time curr)
-      (do (reset! last-warning-nano-time curr)
-          true)
-      false)))
 
 ;used in macros
 ;(t/ann warn [Any * -> Any])
@@ -406,6 +470,7 @@
               (prettify-stack-trace 
                 :process-entries (drop-until-stack-entry 'dynalint.lint/warn)))]
       (add-warning id e)
+      (log e)
       (println msg)
       (flush))))
 
@@ -633,7 +698,7 @@
     (fn clojure.core_SLASH_methods
       [original this-var]
       (fn wrapper
-        [& [multifn dispatch-val-x dispatch-val-y :as all]]
+        [& [multifn :as all]]
         (check-nargs #{1} this-var all)
         (error-if-not ((some-fn #(instance? clojure.lang.MultiFn %)) multifn)
           "First argument to clojure.core/methods must be a multimethod: "
@@ -1030,7 +1095,7 @@
                   (short-ds km))))
         (apply original all)))
    #'clojure.set/subset?
-    (fn clojure.core_SLASH_subset?
+    (fn clojure.set_SLASH_subset?
       [original this-var]
       (fn wrapper
         [& [:as all]]
@@ -1053,7 +1118,7 @@
     (fn clojure.core_SLASH_meta
       [original this-var]
       (fn wrapper
-        [& [x m :as all]]
+        [& [x :as all]]
         (check-nargs #{1} this-var all)
         (apply original all)))
    #'clojure.core/with-meta
@@ -1563,6 +1628,21 @@
   with other monkey-patching libraries. A warning will be thrown if
   reloading fails."
   [& opts]
+  (when opts
+    (let [start-message (get (apply hash-map opts) :start-message)]
+      (when start-message
+        (let [versions (format "Dynalint %s Clojure %s JVM %s"
+                               (dynalint-version)
+                               (clojure-version)
+                               (get (System/getProperties) "java.version"))]
+          (if (= start-message :with-call-stack)
+            (try
+              (println "starting" versions "with call stack:")
+              (throw (Exception.))
+              (catch Exception e
+                (clojure.repl/pst e 300)))
+            (println "starting" versions))
+          (flush)))))
   (lint-macros)
   (lint-inline-vars)
   (lint-var-mappings)
