@@ -1505,10 +1505,16 @@
       (fn wrapper
         ([] (check-nargs #{1 2} this-var []))
         ([name]
-         (error-if-not (or (keyword? name) (symbol? name) (string? name))
-           "For 1-argument version of clojure.core/keyword, argument must be a keyword, symbol, or string: "
-           (short-ds name))
-         (original name))
+         ;; clojure.core/keyword returns nil if the argument is not
+         ;; one of the accepted types.  Speed things up in the common
+         ;; case by only checking the arg type here when the original
+         ;; returns nil.
+         (let [ret (original name)]
+           (when (nil? ret)
+             (error-if-not (or (keyword? name) (symbol? name) (string? name))
+               "For 1-argument version of clojure.core/keyword, argument must be a keyword, symbol, or string: "
+               (short-ds name)))
+           ret))
         ([ns name]
          (error-if-not (string? ns)
            "For 2-argument version of clojure.core/keyword, first argument must be a string: "
