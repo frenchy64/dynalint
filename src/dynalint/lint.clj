@@ -1213,6 +1213,10 @@
     (args-1-wrapper clojure.core_SLASH_vector?
       [original this-var]
        ([x] (original x)))
+   #'clojure.core/nil?
+    (args-1-wrapper clojure.core_SLASH_nil?
+      [original this-var]
+       ([x] (original x)))
    ; this is often a compile time check anyway
    #'clojure.core/instance?
     (args-2-wrapper clojure.core_SLASH_instance? 
