@@ -1098,6 +1098,10 @@
           (warn "clojure.set/superset? should have set arguments: "
                 (short-ds set2)))
         (original set1 set2)))
+   #'clojure.core/meta
+    (args-1-wrapper clojure.core_SLASH_meta
+      [original this-var]
+       ([x] (original x)))
    #'clojure.core/with-meta
     (args-2-wrapper clojure.core_SLASH_with-meta
       [original this-var]
@@ -1189,6 +1193,26 @@
           "First argument to clojure.core/nnext must be seqable: "
           (short-ds the-seq))
         (original the-seq)))
+   #'clojure.core/seq?
+    (args-1-wrapper clojure.core_SLASH_seq?
+      [original this-var]
+       ([x] (original x)))
+   #'clojure.core/char?
+    (args-1-wrapper clojure.core_SLASH_char?
+      [original this-var]
+       ([x] (original x)))
+   #'clojure.core/string?
+    (args-1-wrapper clojure.core_SLASH_string?
+      [original this-var]
+       ([x] (original x)))
+   #'clojure.core/map?
+    (args-1-wrapper clojure.core_SLASH_map?
+      [original this-var]
+       ([x] (original x)))
+   #'clojure.core/vector?
+    (args-1-wrapper clojure.core_SLASH_vector?
+      [original this-var]
+       ([x] (original x)))
    ; this is often a compile time check anyway
    #'clojure.core/instance?
     (args-2-wrapper clojure.core_SLASH_instance? 

@@ -81,6 +81,13 @@
             (::dyn/dynalint (ex-data e#)))
           (catch Throwable _#))))
 
+(deftest meta-test
+  (is (= nil (meta [])))
+  (is (throws-dynalint-error?
+        (meta [] [])))
+  (is (throws-dynalint-error?
+        (meta))))
+
 (deftest with-meta-args-test
   (is (throws-dynalint-error?
         (with-meta nil {})))
@@ -104,6 +111,18 @@
         (fnext 'a)))
   (is (throws-dynalint-error?
         (nnext 'a))))
+
+(deftest pred-test
+  (is (throws-dynalint-error?
+        (seq?)))
+  (is (throws-dynalint-error?
+        (char?)))
+  (is (throws-dynalint-error?
+        (string?)))
+  (is (throws-dynalint-error?
+        (map?)))
+  (is (throws-dynalint-error?
+        (vector?))))
 
 (deftest instance?-args-test
   (is (throws-dynalint-error?
