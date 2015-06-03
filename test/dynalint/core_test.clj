@@ -81,6 +81,31 @@
             (::dyn/dynalint (ex-data e#)))
           (catch Throwable _#))))
 
+(defn err [& args]
+  (binding [*out* *err*]
+    (apply println args)
+    (flush)))
+
+(defmacro debug-throws-dynalint-error? [& body]
+  `(boolean
+    (try (err "debug-throws begins")
+         (do (err "just before body") ~@body (err "no exception") false)
+         (catch clojure.lang.ExceptionInfo e#
+           (err "exceptioninfo e=" e#)
+           (err "   (ex-data e)=" (ex-data e#))
+           (::dyn/dynalint (ex-data e#)))
+         (catch Throwable e#
+           (err "other exception class=" (class e#))
+           (clojure.repl/pst e# 200)
+           nil))))
+
+(deftest meta-test
+  (is (= nil (meta [])))
+  (is (throws-dynalint-error?
+        (meta [] [])))
+  (is (throws-dynalint-error?
+        (meta))))
+
 (deftest with-meta-args-test
   (is (throws-dynalint-error?
         (with-meta nil {})))
@@ -116,8 +141,16 @@
         (map?)))
   (is (throws-dynalint-error?
         (vector?)))
-  #_(is (throws-dynalint-error?
-        (apply nil? nil))))
+  (is (throws-dynalint-error?
+        (vector?)))
+  ;; We have to have higher-order use of nil? to get dynalint-wrapped
+  ;; function, because nil? is inline.  Unfortunately even the test
+  ;; below causes throws-dynalint-error? to throw an ArityException
+  ;; 'Wrong number of args (2) pssed to: lint/nil?  I am not sure why
+  ;; this happens.  It gives a dynalint error if done interactively in
+  ;; a REPL.
+  #_(is (debug-throws-dynalint-error?
+       (doall (map nil? [1] [2])))))
 
 (deftest instance?-args-test
   (is (throws-dynalint-error?
