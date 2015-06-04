@@ -183,6 +183,19 @@ wrapper for `clojure.core/first`, and for most purposes exactly the same as a st
 Use `dynalint.lint/configure-linting!` to customise your linting experience. Note that
 `dynalint.lint/lint` also takes the same arguments, but should only usually be run once.
 
+
+## Rules for Dynalint errors and warnings
+
+The eventual goal is to have Dynalint modifications for all functions
+and macros in Clojure, even if the only change is to give a different
+warning for the wrong number of arguments (e.g. `clojure.core/meta`,
+`clojure.core/number?`, and others).
+
+Dynalint should give an error only when the original function/macro
+would throw an exception, or is known to go into an infinite loop.
+For all other conditions, Dynalint issues a warning.
+
+
 ## Contributions
 
 Clojure CA required please.

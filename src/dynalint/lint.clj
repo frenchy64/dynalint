@@ -1433,7 +1433,7 @@
          (error-if-not (map? m)
            "clojure.core/ex-info additional data must be a persistent map: "
            (short-ds m))
-         (error-if-not (instance? Throwable cause)
+         (error-if-not (or (instance? Throwable cause) (nil? cause))
            "clojure.core/ex-info third arg 'cause' must be a Throwable: "
            (short-ds cause))
          (original msg m cause))
@@ -1446,30 +1446,42 @@
         ([] (check-nargs #{2 3 4} this-var []))
         ([a1] (check-nargs #{2 3 4} this-var [a1]))
         ([n coll]
-         (error-if-not (and (integer? n) (pos? n))
-           "First argument to clojure.core/partition must be positive integer: "
+         (error-if-not (and (number? n) (not (zero? n)))
+           "First argument to clojure.core/partition must be non-0 number")
+         (warn-if-not (and (integer? n) (pos? n))
+           "First argument to clojure.core/partition should be positive integer: "
            (short-ds n))
          (error-if-not (seq-succeeds? coll)
            "Last argument to clojure.core/partition must be seqable: "
            (short-ds coll))
          (original n coll))
         ([n step coll]
-         (error-if-not (and (integer? n) (pos? n))
-           "First argument to clojure.core/partition must be positive integer: "
+         (error-if-not (number? n)
+           "First argument to clojure.core/partition must be number: "
            (short-ds n))
-         (error-if-not (and (integer? step) (pos? step))
-           "step argument to clojure.core/partition must be positive integer: "
+         (warn-if-not (and (integer? n) (pos? n))
+           "First argument to clojure.core/partition should be positive integer: "
+           (short-ds n))
+         (error-if-not (and (number? step) (pos? step))
+           "step argument to clojure.core/partition must be positive number")
+         (warn-if-not (integer? step)
+           "step argument to clojure.core/partition should be positive integer: "
            (short-ds step))
          (error-if-not (seq-succeeds? coll)
            "Last argument to clojure.core/partition must be seqable: "
            (short-ds coll))
          (original n step coll))
         ([n step pad coll]
-         (error-if-not (and (integer? n) (pos? n))
-           "First argument to clojure.core/partition must be positive integer: "
+         (error-if-not (number? n)
+           "First argument to clojure.core/partition must be number: "
            (short-ds n))
-         (error-if-not (and (integer? step) (pos? step))
-           "step argument to clojure.core/partition must be positive integer: "
+         (warn-if-not (and (integer? n) (pos? n))
+           "First argument to clojure.core/partition should be positive integer: "
+           (short-ds n))
+         (error-if-not (and (number? step) (pos? step))
+           "step argument to clojure.core/partition must be positive number")
+         (warn-if-not (integer? step)
+           "step argument to clojure.core/partition should be positive integer: "
            (short-ds step))
          (error-if-not (seq-succeeds? pad)
            "pad argument to clojure.core/partition must be seqable: "
@@ -1487,20 +1499,30 @@
         ([] (check-nargs #{2 3} this-var []))
         ([a1] (check-nargs #{2 3} this-var [a1]))
         ([n coll]
-         (error-if-not (and (integer? n) (pos? n))
-           "First argument to clojure.core/partition-all must be positive integer: "
+         ;; Violating this condition causes infinite loop in original
+         (error-if-not (and (number? n) (pos? n))
+           "First argument to clojure.core/partition-all must be positive number")
+         (warn-if-not (integer? n)
+           "First argument to clojure.core/partition-all should be positive integer: "
            (short-ds n))
          (error-if-not (seq-succeeds? coll)
            "Last argument to clojure.core/partition-all must be seqable: "
            (short-ds coll))
          (original n coll))
         ([n step coll]
-         (error-if-not (and (integer? n) (pos? n))
-           "First argument to clojure.core/partition-all must be positive integer: "
+         ;; Violating this condition causes infinite loop in original
+         (error-if-not (and (number? step) (pos? step))
+           "step argument to clojure.core/partition-all must be positive number: "
            (short-ds n))
-         (error-if-not (and (integer? step) (pos? step))
-           "step argument to clojure.core/partition-all must be positive integer: "
-           (short-ds step))
+         (warn-if-not (integer? step)
+           "step argument to clojure.core/partition-all should be positive integer: "
+           (short-ds n))
+         (error-if-not (number? n)
+           "First argument to clojure.core/partition-all must be a number: "
+           (short-ds n))
+         (warn-if-not (and (integer? n) (pos? n))
+           "First argument to clojure.core/partition-all should be positive integer: "
+           (short-ds n))
          (error-if-not (seq-succeeds? coll)
            "Last argument to clojure.core/partition-all must be seqable: "
            (short-ds coll))
@@ -1539,7 +1561,7 @@
          ;; returns nil.
          (let [ret (original name)]
            (when (nil? ret)
-             (error-if-not (or (keyword? name) (symbol? name) (string? name))
+             (warn-if-not (or (keyword? name) (symbol? name) (string? name))
                "For 1-argument version of clojure.core/keyword, argument must be a keyword, symbol, or string: "
                (short-ds name)))
            ret))
