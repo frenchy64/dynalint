@@ -622,6 +622,9 @@
        ([a1# a2# a3# a4# & as#]
         (check-nargs #{3} ~this-var (list* a1# a2# a3# a4# as#))))))
 
+(def vector-of-allowed-first-args
+  #{:int :long :float :double :byte :short :char :boolean})
+
 ;(t/ann new-var-mappings (t/Map Var [[Any * -> Any] (Var Nothing Any) -> [Any * -> Any]]))
 (def ^:private new-var-mappings
   {#'clojure.core/keys
@@ -1410,6 +1413,168 @@
          (original ref timeout-ms timeout-val))
         ([a1 a2 a3 a4 & as]
          (check-nargs #{1 3} this-var (list* a1 a2 a3 a4 as)))))
+   #'clojure.core/ex-info
+    (fn clojure.core_SLASH_ex-info
+      [original this-var]
+      (fn wrapper
+        ([] (check-nargs #{2 3} this-var []))
+        ([a1] (check-nargs #{2 3} this-var [a1]))
+        ([msg m]
+         (error-if-not (string? msg)
+           "clojure.core/ex-info first arg 'msg' must be a string: "
+           (short-ds msg))
+         ;; Clojure already throws an exception if (map? m) is false
+         ;; for this case.
+         (original msg m))
+        ([msg m cause]
+         (error-if-not (string? msg)
+           "clojure.core/ex-info first arg 'msg' must be a string: "
+           (short-ds msg))
+         (error-if-not (map? m)
+           "clojure.core/ex-info additional data must be a persistent map: "
+           (short-ds m))
+         (error-if-not (or (instance? Throwable cause) (nil? cause))
+           "clojure.core/ex-info third arg 'cause' must be a Throwable: "
+           (short-ds cause))
+         (original msg m cause))
+        ([a1 a2 a3 a4 & as]
+         (check-nargs #{2 3} this-var (list* a1 a2 a3 a4 as)))))
+   #'clojure.core/partition
+    (fn clojure.core_SLASH_partition
+      [original this-var]
+      (fn wrapper
+        ([] (check-nargs #{2 3 4} this-var []))
+        ([a1] (check-nargs #{2 3 4} this-var [a1]))
+        ([n coll]
+         (error-if-not (and (number? n) (not (zero? n)))
+           "First argument to clojure.core/partition must be non-0 number")
+         (warn-if-not (and (integer? n) (pos? n))
+           "First argument to clojure.core/partition should be positive integer: "
+           (short-ds n))
+         (error-if-not (seq-succeeds? coll)
+           "Last argument to clojure.core/partition must be seqable: "
+           (short-ds coll))
+         (original n coll))
+        ([n step coll]
+         (error-if-not (number? n)
+           "First argument to clojure.core/partition must be number: "
+           (short-ds n))
+         (warn-if-not (and (integer? n) (pos? n))
+           "First argument to clojure.core/partition should be positive integer: "
+           (short-ds n))
+         (error-if-not (and (number? step) (pos? step))
+           "step argument to clojure.core/partition must be positive number")
+         (warn-if-not (integer? step)
+           "step argument to clojure.core/partition should be positive integer: "
+           (short-ds step))
+         (error-if-not (seq-succeeds? coll)
+           "Last argument to clojure.core/partition must be seqable: "
+           (short-ds coll))
+         (original n step coll))
+        ([n step pad coll]
+         (error-if-not (number? n)
+           "First argument to clojure.core/partition must be number: "
+           (short-ds n))
+         (warn-if-not (and (integer? n) (pos? n))
+           "First argument to clojure.core/partition should be positive integer: "
+           (short-ds n))
+         (error-if-not (and (number? step) (pos? step))
+           "step argument to clojure.core/partition must be positive number")
+         (warn-if-not (integer? step)
+           "step argument to clojure.core/partition should be positive integer: "
+           (short-ds step))
+         (error-if-not (seq-succeeds? pad)
+           "pad argument to clojure.core/partition must be seqable: "
+           (short-ds coll))
+         (error-if-not (seq-succeeds? coll)
+           "Last argument to clojure.core/partition must be seqable: "
+           (short-ds coll))
+         (original n step pad coll))
+        ([a1 a2 a3 a4 a5 & as]
+         (check-nargs #{2 3 4} this-var (list* a1 a2 a3 a4 a5 as)))))
+   #'clojure.core/partition-all
+    (fn clojure.core_SLASH_partition-all
+      [original this-var]
+      (fn wrapper
+        ([] (check-nargs #{2 3} this-var []))
+        ([a1] (check-nargs #{2 3} this-var [a1]))
+        ([n coll]
+         ;; Violating this condition causes infinite loop in original
+         (error-if-not (and (number? n) (pos? n))
+           "First argument to clojure.core/partition-all must be positive number")
+         (warn-if-not (integer? n)
+           "First argument to clojure.core/partition-all should be positive integer: "
+           (short-ds n))
+         (error-if-not (seq-succeeds? coll)
+           "Last argument to clojure.core/partition-all must be seqable: "
+           (short-ds coll))
+         (original n coll))
+        ([n step coll]
+         ;; Violating this condition causes infinite loop in original
+         (error-if-not (and (number? step) (pos? step))
+           "step argument to clojure.core/partition-all must be positive number: "
+           (short-ds n))
+         (warn-if-not (integer? step)
+           "step argument to clojure.core/partition-all should be positive integer: "
+           (short-ds n))
+         (error-if-not (number? n)
+           "First argument to clojure.core/partition-all must be a number: "
+           (short-ds n))
+         (warn-if-not (and (integer? n) (pos? n))
+           "First argument to clojure.core/partition-all should be positive integer: "
+           (short-ds n))
+         (error-if-not (seq-succeeds? coll)
+           "Last argument to clojure.core/partition-all must be seqable: "
+           (short-ds coll))
+         (original n step coll))
+        ([a1 a2 a3 a4 & as]
+         (check-nargs #{2 3} this-var (list* a1 a2 a3 a4 as)))))
+   #'clojure.core/vector-of
+    (fn clojure.core_SLASH_vector-of
+      [original this-var]
+      (fn wrapper
+        ([] (check-nargs #(<= 1 %) this-var []))
+        ([t & xs]
+         (error-if-not (vector-of-allowed-first-args t)
+           "First argument to clojure.core/vector-of must be one of ["
+           (str/join " " (sort vector-of-allowed-first-args)) "] not: "
+           (short-ds t))
+         (apply original t xs))))
+   #'clojure.java.io/reader
+    (fn clojure.java.io_SLASH_reader
+      [original this-var]
+      (fn wrapper
+        ([] (check-nargs #(<= 1 %) this-var []))
+        ([x & opts]
+         (error-if (nil? x)
+           "First argument to clojure.java.io/reader must not be nil")
+         (apply original x opts))))
+   #'clojure.core/keyword
+    (fn clojure.core_SLASH_keyword
+      [original this-var]
+      (fn wrapper
+        ([] (check-nargs #{1 2} this-var []))
+        ([name]
+         ;; clojure.core/keyword returns nil if the argument is not
+         ;; one of the accepted types.  Speed things up in the common
+         ;; case by only checking the arg type here when the original
+         ;; returns nil.
+         (let [ret (original name)]
+           (when (nil? ret)
+             (warn-if-not (or (keyword? name) (symbol? name) (string? name))
+               "For 1-argument version of clojure.core/keyword, argument must be a keyword, symbol, or string: "
+               (short-ds name)))
+           ret))
+        ([ns name]
+         (error-if-not (string? ns)
+           "For 2-argument version of clojure.core/keyword, first argument must be a string: "
+           (short-ds ns))
+         (error-if-not (string? name)
+           "For 2-argument version of clojure.core/keyword, second argument must be a string: "
+           (short-ds name))
+         (original ns name))
+        ([a1 a2 a3 & as]
+         (check-nargs #{1 2} this-var (list* a1 a2 a3 as)))))
    })
 
 ;(t/ann new-var-inlines (t/Map Var [[Any * -> Any] -> [Any * -> Any]]))
