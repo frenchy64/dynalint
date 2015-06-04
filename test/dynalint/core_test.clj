@@ -517,6 +517,9 @@
   (is (= :foo (keyword 'foo)))
   (is (= :foo (keyword "foo")))
   (is (= :foo/bar (keyword "foo" "bar")))
+  ;; First argument nil to 2-arg keyword does not cause an exception
+  ;; without dynalint, and should not cause one with dynalint, either.
+  (is (= :foo (keyword nil "foo")))
 
   ;; Bad type for one arg arity
   (is (issues-dynalint-warning?

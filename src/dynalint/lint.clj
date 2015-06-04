@@ -1566,8 +1566,8 @@
                (short-ds name)))
            ret))
         ([ns name]
-         (error-if-not (string? ns)
-           "For 2-argument version of clojure.core/keyword, first argument must be a string: "
+         (error-if-not (or (string? ns) (nil? ns))
+           "For 2-argument version of clojure.core/keyword, first argument must be a string or nil: "
            (short-ds ns))
          (error-if-not (string? name)
            "For 2-argument version of clojure.core/keyword, second argument must be a string: "
