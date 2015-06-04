@@ -208,6 +208,9 @@
         (get-in {} 1))))
 
 (deftest symbol-args-test
+  ;; First argument nil to 2-arg symbol does not cause an exception
+  ;; without dynalint, and should not cause one with dynalint, either.
+  (is (= 'foo (symbol nil "foo")))
   (is (throws-dynalint-error?
         (symbol :a)))
   (is (throws-dynalint-error?

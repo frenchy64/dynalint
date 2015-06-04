@@ -1249,8 +1249,8 @@
                   (short-ds s1)))
          (original s1))
         ([s1 s2]
-         (when-not (string? s1)
-           (error "First argument to clojure.core/symbol (with 2 arguments) must be a string: "
+         (when-not (or (string? s1) (nil? s1))
+           (error "First argument to clojure.core/symbol (with 2 arguments) must be a string or nil: "
                   (short-ds s1)))
          (when-not (string? s2)
            (error "Second argument to clojure.core/symbol (with 2 arguments) must be a string: "
