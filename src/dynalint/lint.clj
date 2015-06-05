@@ -864,7 +864,7 @@
         ; give a better error for more than 1 argument, this will always
         ; fail if given anything other than a map or nil
         (error-if (and (seq ks) (not ((some-fn map? nil?) m)))
-          "clojure.core/dissoc first argument must be a map: "
+          "clojure.core/dissoc first argument must be a map or nil: "
           (short-ds m))
         (apply original m ks))))
    #'clojure.core/update-in
