@@ -1357,7 +1357,8 @@
             (error "First argument to clojure.core/conj must be a persistent collection or nil: "
                    (short-ds t))
           (and (map? t)
-               ((complement 
+               (some
+                (complement 
                   (some-fn 
                     #(instance? java.util.Map$Entry %)
                     (every-pred vector?
@@ -1365,7 +1366,7 @@
                     (every-pred seq-succeeds?
                                 (partial every? #(instance? java.util.Map$Entry %)))
                     nil?))
-                a))
+                (cons a args)))
             (error "Can only conj nil, a map entry, a vector pair or a seqable of map entries onto a map: "
                    (short-ds a)))
         (apply original t a args))))
