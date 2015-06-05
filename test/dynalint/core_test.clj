@@ -271,10 +271,41 @@
   (is (agent 1 :error-mode false)))
 
 (deftest conj-args-test
-  (is (conj {} {1 2}))
-  (is (conj {} (seq {1 2 3 4})))
+  (is (= {}
+         (conj {} nil)))
+  (is (= {1 2}
+         (conj {} {1 2})))
+  (is (= {1 2, 3 4}
+         (conj {} (seq {1 2, 3 4}))))
+  (is (= {1 2, 3 4, 5 6, 7 8}
+         (conj {1 3} {1 2, 3 4} (seq {5 6, 7 8}))))
+  (is (= {:a 1}
+         (conj {} [:a 1])))
+  (is (= {:a 1, :b 2}
+         (conj {} [:a 1] {:b 2})))
+  (is (= {:a 1, :b 2}
+         (conj {} [:a 1] nil {:b 2})))
+  
+  ;; First arg is neither collection nor nil
   (is (throws-dynalint-error?
-        (conj {} 1 2))))
+       (conj 5 1)))
+  (is (throws-dynalint-error?
+       (conj 5 1 2)))
+
+  ;; First arg is a map, and one or more later args is none of:
+  ;; nil, a map entry, a 2-arg vector, a seqable of map entries,
+  (is (throws-dynalint-error?
+       (conj {} 1)))
+  (is (throws-dynalint-error?
+       (conj {} [1 2 3])))
+  (is (throws-dynalint-error?
+       (conj {} :a 1)))
+  (is (throws-dynalint-error?
+       (conj {} (cons [1 2] (seq {5 6 7 8})))))
+  ;; This should be an error
+  (is (throws-dynalint-error?
+       (conj {} [9 10] (cons [1 2] (seq {5 6 7 8})))))
+  )
 
 (deftest next-rest-args-test
   (is (throws-dynalint-error?
