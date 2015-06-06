@@ -1352,23 +1352,22 @@
        ([] (check-nargs #(<= 2 %) this-var []))
        ([a1] (check-nargs #(<= 2 %) this-var [a1]))
        ([t a & args]
-        (cond
-          (not ((some-fn nil? coll?) t))
-            (error "First argument to clojure.core/conj must be a persistent collection or nil: "
-                   (short-ds t))
-          (and (map? t)
-               (some
-                (complement 
-                  (some-fn 
-                    #(instance? java.util.Map$Entry %)
-                    (every-pred vector?
-                                #(#{2} (count %)))
-                    (every-pred seq-succeeds?
-                                (partial every? #(instance? java.util.Map$Entry %)))
-                    nil?))
-                (cons a args)))
-            (error "Can only conj nil, a map entry, a vector pair or a seqable of map entries onto a map: "
-                   (short-ds a)))
+        (error-if-not ((some-fn nil? coll?) t)
+          "First argument to clojure.core/conj must be a persistent collection or nil: "
+          (short-ds t))
+        (when (map? t)
+          (doseq [x (cons a args)]
+            (error-if-not
+             ((some-fn
+               #(instance? java.util.Map$Entry %)
+               (every-pred vector?
+                           #(#{2} (count %)))
+               (every-pred seq-succeeds?
+                           (partial every? #(instance? java.util.Map$Entry %)))
+               nil?)
+              x)
+              "Can only conj nil, a map entry, a vector pair or a seqable of map entries onto a map: "
+              (short-ds x))))
         (apply original t a args))))
    #'clojure.core/next
     (args-1-wrapper clojure.core_SLASH_next
