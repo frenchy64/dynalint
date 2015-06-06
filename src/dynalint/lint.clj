@@ -929,7 +929,7 @@
         (error-if-not (seq-succeeds? vs)
           "Second argument to clojure.core/zipmap must be seqable: "
           (short-ds vs))
-        (when-not ((some-fn sequential? nil?) ks vs)
+        (when-not ((every-pred (some-fn sequential? nil?)) ks vs)
           (warn "clojure.core/zipmap arguments should be sequential or nil: "
                 (short-ds ks) ", " (short-ds vs)))
         (original ks vs)))

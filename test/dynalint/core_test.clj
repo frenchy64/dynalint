@@ -364,7 +364,13 @@
         (rest 1))))
 
 (deftest zipmap-test
-  (is (zipmap #{} #{}))
+  (is (= {1 2, 3 4} (zipmap [1 3] [2 4])))
+  (is (issues-dynalint-warning?
+       (zipmap #{} [1 2])))
+  (is (issues-dynalint-warning?
+       (zipmap [1 2] #{})))
+  (is (issues-dynalint-warning?
+       (zipmap #{} #{})))
   (is (throws-dynalint-error?
         (zipmap 1 #{})))
   (is (throws-dynalint-error?
