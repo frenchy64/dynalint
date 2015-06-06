@@ -121,6 +121,52 @@
 (defmacro issues-dynalint-warning? [& body]
   true)
 
+(deftest namespace-test
+  (is (= nil (namespace 'foo)))
+  (is (= "foo" (namespace :foo/bar)))
+  (is (throws-dynalint-error?
+        (namespace "foo"))))
+
+(defmulti multimeth1 :foo)
+
+(defmethod multimeth1 "x" [_]
+  "multimeth1 for x")
+
+(deftest multimethods-test
+  ;; Do all of these in a single deftest, because some of the method
+  ;; calls have side effects, making the order important.
+
+  ;; methods
+  (is (== 1 (count (methods multimeth1))))
+  (is (throws-dynalint-error?
+       (methods 'multimeth1)))
+
+  ;; get-method
+  (is (= nil (get-method multimeth1 {:foo "x"})))
+  (is (throws-dynalint-error?
+       (get-method 'multimeth1 {:foo "x"})))
+
+  ;; prefer-method
+  (is (= multimeth1 (prefer-method multimeth1 "x" "y")))
+  (is (throws-dynalint-error?
+       (prefer-method "x" "y" multimeth1)))
+
+  ;; prefers
+  (is (= {"x" #{"y"}} (prefers multimeth1)))
+  (is (throws-dynalint-error?
+       (prefers "x")))
+
+  ;; remove-method
+  (is (= multimeth1 (remove-method multimeth1 "x")))
+  (is (throws-dynalint-error?
+       (remove-method "x")))
+
+  ;; remove-all-methods
+  (is (= multimeth1 (remove-all-methods multimeth1)))
+  (is (throws-dynalint-error?
+       (remove-all-methods "x")))
+  )
+
 (deftest meta-test
   (is (= nil (meta [])))
   (is (throws-dynalint-error?

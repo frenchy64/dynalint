@@ -685,7 +685,7 @@
     (args-1-wrapper clojure.core_SLASH_namespace
       [original this-var]
        ([x]
-        (error-if-not ((some-fn #(instance? clojure.lang.Named %)) x)
+        (error-if-not (instance? clojure.lang.Named x)
           "First argument to clojure.core/namespace must be named: "
           (short-ds x))
         (original x)))
@@ -693,7 +693,7 @@
     (args-1-wrapper clojure.core_SLASH_remove-all-methods
       [original this-var]
        ([multifn]
-        (error-if-not ((some-fn #(instance? clojure.lang.MultiFn %)) multifn)
+        (error-if-not (instance? clojure.lang.MultiFn multifn)
           "First argument to clojure.core/remove-all-methods must be a multimethod: "
           (short-ds multifn))
         (original multifn)))
@@ -701,7 +701,7 @@
     (args-2-wrapper clojure.core_SLASH_remove-method
       [original this-var]
        ([multifn dispatch-val]
-        (error-if-not ((some-fn #(instance? clojure.lang.MultiFn %)) multifn)
+        (error-if-not (instance? clojure.lang.MultiFn multifn)
           "First argument to clojure.core/remove-method must be a multimethod: "
           (short-ds multifn))
         (original multifn dispatch-val)))
@@ -709,7 +709,7 @@
     (args-3-wrapper clojure.core_SLASH_prefer-method
       [original this-var]
        ([multifn dispatch-val-x dispatch-val-y]
-        (error-if-not ((some-fn #(instance? clojure.lang.MultiFn %)) multifn)
+        (error-if-not (instance? clojure.lang.MultiFn multifn)
           "First argument to clojure.core/prefer-method must be a multimethod: "
           (short-ds multifn))
         (original multifn dispatch-val-x dispatch-val-y)))
@@ -717,7 +717,7 @@
     (args-1-wrapper clojure.core_SLASH_methods
       [original this-var]
        ([multifn]
-        (error-if-not ((some-fn #(instance? clojure.lang.MultiFn %)) multifn)
+        (error-if-not (instance? clojure.lang.MultiFn multifn)
           "First argument to clojure.core/methods must be a multimethod: "
           (short-ds multifn))
         (original multifn)))
@@ -725,7 +725,7 @@
     (args-2-wrapper clojure.core_SLASH_get-method
       [original this-var]
        ([multifn dispatch-val]
-        (error-if-not ((some-fn #(instance? clojure.lang.MultiFn %)) multifn)
+        (error-if-not (instance? clojure.lang.MultiFn multifn)
           "First argument to clojure.core/get-method must be a multimethod: "
           (short-ds multifn))
         (original multifn dispatch-val)))
@@ -733,7 +733,7 @@
     (args-1-wrapper clojure.core_SLASH_prefers
       [original this-var]
        ([multifn]
-        (error-if-not ((some-fn #(instance? clojure.lang.MultiFn %)) multifn)
+        (error-if-not (instance? clojure.lang.MultiFn multifn)
           "First argument to clojure.core/prefers must be a multimethod: "
           (short-ds multifn))
         (original multifn)))
