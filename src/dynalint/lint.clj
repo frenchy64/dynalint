@@ -1,8 +1,6 @@
-(ns 
-  ^{:core.typed {:collect-only true}}
-  ^{:doc "The main namespace to load the linter. See `lint`."}
-  dynalint.lint
-  (:import (clojure.lang Var))
+(ns dynalint.lint
+  "The main namespace to load the linter. See `lint`."
+  #_(:import (clojure.lang Var))
   (:refer-clojure :exclude [nil?])
   (:require [clojure.repl :as repl]
             [clojure.string :as str]
@@ -22,12 +20,12 @@
            (str "-" qualifier)
            ""))))
 
-(when-not (#{"1.5.1" "1.6.0"} (clojure-version))
-  (prn "WARNING: Dynalint is designed for Clojure 1.5.1 and 1.6.0, running "
-       (clojure-version)))
+(when-not (#{"1.5.1" "1.6.0" "1.7.0"} (clojure-version))
+  (prn (str "WARNING: Dynalint is designed for Clojure 1.5.1, 1.6.0, and 1.7.0 running "
+            (clojure-version))))
 
 ;(t/tc-ignore
-(set! *warn-on-reflection* true)
+;(set! *warn-on-reflection* true)
   ;)
 
 (defmacro tc-ignore [& body]
