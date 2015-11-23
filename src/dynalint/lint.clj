@@ -947,18 +947,16 @@
    #'clojure.core/unchecked-inc
      (args-1-wrapper clojure.core_SLASH_unchecked-inc
        [original this-var]
-       (fn wrapper
-         [& [x :as all]]
-         (check-nargs #{1} this-var all)
-         (when (instance? Long x)
-           (error-if (== x Long/MAX_VALUE)
-             "integer overflow (Long/MAX_VALUE): clojure.core/unchecked-inc"))
-         (let [res (apply original all)]
-           (when-not (< x res)
-             (warn "clojure.core/unchecked-inc overflow detected: "
-                   (short-ds x) " (" (class x) ")" " -> " (short-ds res)
-                   " (" (class x) ")"))
-           res)))
+       ([x]
+        (when (instance? Long x)
+          (error-if (== x Long/MAX_VALUE)
+                    "integer overflow (Long/MAX_VALUE): clojure.core/unchecked-inc"))
+        (let [res (original x)]
+          #_(when-not (< x res)
+            (warn "clojure.core/unchecked-inc overflow detected: "
+                  (short-ds x) " (" (class x) ")" " -> " (short-ds res)
+                  " (" (class x) ")"))
+          res)))
    #'clojure.core/unchecked-add
      (args-2-wrapper clojure.core_SLASH_unchecked-add
        [original this-var]
@@ -1586,17 +1584,20 @@
 (def ^:private new-var-inlines
   {#'clojure.core/unchecked-inc
     (fn [original the-var]
-      (fn [x]
-        (let [gx (gensym 'x)]
-          `(let [~gx ~x
-                 res# ~(original gx)]
-             (tc-ignore
-               (when-not (< ~gx res#)
-                 (warn "clojure.core/unchecked-inc (inlining) overflow detected : "
-                       (short-ds ~gx) " (" (class ~gx) ")" " -> " (short-ds res#)
-                       " (" (class ~gx) ")")))
-             ; help the type inference out
-             ~(original gx)))))
+      (fn
+        ([x]
+         (let [gx (gensym 'x)]
+           `(let [~gx ~x
+                  res# ~(original gx)]
+              (tc-ignore
+                (when-not (< ~gx res#)
+                  (warn "clojure.core/unchecked-inc (inlining) overflow detected : "
+                        (short-ds ~gx) " (" (class ~gx) ")" " -> " (short-ds res#)
+                        " (" (class ~gx) ")")))
+              ; help the type inference out
+              ~(original gx))))
+        ([x & args]
+         (check-nargs #{1} the-var (list* x args)))))
    })
 
 (def ^:dynamic *inside-lazy-seq* false)
