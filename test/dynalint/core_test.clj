@@ -79,6 +79,10 @@
      (try (do ~@body false)
           (catch clojure.lang.ExceptionInfo e#
             (::dyn/dynalint (ex-data e#)))
+          (catch RuntimeException e#
+            (let [e# (.getCause e#)]
+              (when (instance? clojure.lang.ExceptionInfo e#)
+                (::dyn/dynalint (ex-data e#)))))
           (catch Throwable _#))))
 
 (deftest with-meta-args-test
@@ -132,11 +136,16 @@
         (seq 'a 'a))))
 
 (deftest unchecked-inc-args-test
-  #_(is (throws-dynalint-error?
-        (unchecked-inc Long/MAX_VALUE)))
-  #_(is (throws-dynalint-error?
-        (unchecked-inc Long/MAX_VALUE 1)))
-  #_(is (throws-dynalint-error?
+  ;; inlining just on wraparound
+  (is (eval `(unchecked-inc Long/MAX_VALUE))
+      -9223372036854775808)
+  (is (throws-dynalint-error?
+        (eval
+          `(apply unchecked-inc [Long/MAX_VALUE]))))
+  (is (throws-dynalint-error?
+        (eval
+          `(unchecked-inc Long/MAX_VALUE 1))))
+  (is (throws-dynalint-error?
         (apply unchecked-inc [Long/MAX_VALUE 1]))))
 
 

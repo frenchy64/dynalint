@@ -883,6 +883,9 @@
        (fn wrapper
          [& [x :as all]]
          (check-nargs #{1} this-var all)
+         (when (instance? Long x)
+           (error-if (== x Long/MAX_VALUE)
+             "integer overflow (Long/MAX_VALUE): clojure.core/unchecked-inc"))
          (let [res (apply original all)]
            (when-not (< x res)
              (warn "clojure.core/unchecked-inc overflow detected: "
