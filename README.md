@@ -1,3 +1,9 @@
+# ABANDONED
+
+The original author has abandoned this approach.
+Please fork if you want to continue this work, otherwise
+please do not send new PR's.
+
 # Dynalint
 
 Lint your Clojure programs as they run.
